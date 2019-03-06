@@ -1,0 +1,1 @@
+- vcd.py currently uses hardcoded `clock_symbol` and `reset_symbol` but that should be derived from scanning the `clock` and `reset` nets from the top-level
