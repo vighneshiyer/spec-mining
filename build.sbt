@@ -26,9 +26,9 @@ def javacOptionsVersion(scalaVersion: String): Seq[String] = {
   }
 }
 
-name := "chisel-module-template"
+name := "spec-mining"
 
-version := "3.2-SNAPSHOT"
+version := "0.1-SNAPSHOT"
 
 scalaVersion := "2.12.6"
 
@@ -43,7 +43,7 @@ resolvers ++= Seq(
 val defaultVersions = Map(
   "chisel3" -> "3.2-SNAPSHOT",
   "chisel-iotesters" -> "1.3-SNAPSHOT"
-  )
+)
 
 libraryDependencies ++= Seq("chisel3","chisel-iotesters").map {
   dep: String => "edu.berkeley.cs" %% dep % sys.props.getOrElse(dep + "Version", defaultVersions(dep)) }

@@ -1,1 +1,3 @@
-- vcd.py currently uses hardcoded `clock_symbol` and `reset_symbol` but that should be derived from scanning the `clock` and `reset` nets from the top-level
+- [ ] Get GCD test running with more test vectors and more randomness in input injection and output extraction from R/V interface
+- [ ] Develop an even simpler DUT with R/V interfaces and deterministic delay
+- [ ] vcd.py currently uses hardcoded `clock_symbol` and `reset_symbol` but that should be derived from scanning the `clock` and `reset` nets from the top-level
