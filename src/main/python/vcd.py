@@ -3,58 +3,76 @@ import logging
 from collections import deque
 import numpy as np
 from scipy.sparse import csr_matrix
-from utils import divide_csr
+import sys
+from typing import List, Dict
+from dataclasses import dataclass
+# from utils import divide_csr
+
+
+# TODO: split the definition parsing
+def parse_definitions(defn_lines):
+    pass
+
+
+@dataclass(frozen=True)
+class Event:
+    time: int
+    value: int
+
 
 def read_toggles_vcd(vcd_filename, signal_filter=None, clock=1000, window=1):
     logging.info("VCD file: %s, Window: %d", vcd_filename, window)
-    assert os.path.isfile(vcd_filename), "%s not found" % (vcd_filename)
+    assert os.path.isfile(vcd_filename), "%s not found" % vcd_filename
     cycle = 0
     reset_cycle = 0
-    bus_signals = list()
-    bus_toggles = list()
-    bus_indices = list()
+
+    symbols = dict()        # type: Dict[str, int] # symbol -> idx
+    bus_signals = list()    # type: List[str]
+    bus_toggles = list()    # type: List[deque]
+    bus_indices = list()    # type: List[deque]
+    widths = list()         # type: List[int]
+
+    vcd_data = None         # type: List[List[Event]]
+
     time = -1
-    path = list()
-    symbols = dict() # symbol -> idx
-    widths = list()
-    clock_value = None
-    clock_symbol = 'Vq'
-    reset_value = None
-    reset_symbol = 'sg'
     with open(vcd_filename, "r") as _f:
+        path = list()           # type: List[str]
+        clock_value = None      # type: int
+        clock_symbol = None     # type: str
+        reset_value = None      # type: int
+        reset_symbol = None     # type: str
+
         for line in _f:
             tokens = line.split()
             if not tokens:
                 pass
             elif tokens[0][0] == "$":
-                ######################
-                # Decode Definitions #
-                ######################
+                # module instance
                 if tokens[0] == "$scope":
                     assert tokens[1] == "module"
                     assert tokens[3] == "$end"
-                    # module instance
                     path.append(tokens[2])
+                # move up to the upper module instance
                 elif tokens[0] == "$upscope":
-                    # move up to the upper module instance
                     path = path[:-1]
+                # signal definition
                 elif tokens[0] == "$var":
-                    # signal definition """
                     width = int(tokens[2])
                     symbol = tokens[3]
-                    signal = ("%s.%s" % (".".join(path), tokens[4])).replace(
-                        "harness.tester.dut.", "")
-
-                    if signal == "clock":
+                    signal_name = tokens[4]
+                    signal = ("%s.%s" % (".".join(path), signal_name))
+                    if signal_name == "clock":
                         clock_symbol = symbol
                         clock_value = '0'
-                    elif signal == "reset":
+                    elif signal_name == "reset":
                         reset_symbol = symbol
+                    # TODO: refine this (maybe use the signal filter)
                     elif ("clock" in signal or "reset" in signal
-                          or "_clk" in signal or "_rst" in signal
-                          or "initvar" in signal or "_RAND" in signal
-                          or "_GEN_" in signal): # FIXME: due to circuit mismatch
+                            or "_clk" in signal or "_rst" in signal
+                            or "initvar" in signal or "_RAND" in signal
+                            or "_GEN_" in signal):  # FIXME: due to circuit mismatch
                         pass
+                    # TODO: annotate what this does exactly, generalize the above case into signal_filter
                     elif signal_filter and signal not in signal_filter:
                         pass
                     elif symbol not in symbols:
@@ -63,21 +81,23 @@ def read_toggles_vcd(vcd_filename, signal_filter=None, clock=1000, window=1):
                         bus_signals.append(signal)
                         bus_toggles.append(deque())
                         bus_indices.append(deque())
+                    elif symbol in symbols:
+                        assert False, "I've already seen this symbol {} for signal {}".format(symbol, signal)
+                # no more variable definitions
                 elif tokens[0] == "$enddefinitions":
-                    # no more variable definitions """
+                    assert tokens[1] == "$end"
                     has_toggled = [False] * len(bus_signals)
                     cur_toggles = [0] * len(bus_signals)
                     cur_values = [0] * len(bus_signals)
                     prev_values = [0] * len(bus_signals)
                     path = list()
+                    print("$enddefinitions - bus_signals: {}".format(list(zip(bus_signals, widths))))
 
+            # TODO: parse $dumpvars section for initial values of signals
             elif tokens[0][0] == '#':
                 # simulation time
                 time = int(tokens[0][1:])
-
-                ##############
-                # Clock Tick #
-                ##############
+                # Clock Tick
                 if cycle > 0 and clock_value == '1':
                     if reset_value == '1':
                         reset_cycle += 1
@@ -156,7 +176,12 @@ def read_toggles_vcd(vcd_filename, signal_filter=None, clock=1000, window=1):
     indptr = np.array(indptr, dtype=np.int64)
     indices = np.array(indices, dtype=np.int64)
     shape = len(bus_signals), int((cycle - reset_cycle - 1) / window) + 1
+    #print(toggles)
     data = csr_matrix((toggles, indices, indptr), shape=shape)
-    data = divide_csr(data, window * widths.reshape(-1, 1))
+    #data = divide_csr(data, window * widths.reshape(-1, 1))
 
     return cycle, reset_cycle, bus_signals, data, widths
+
+
+if __name__ == "__main__":
+    read_toggles_vcd(sys.argv[1])
