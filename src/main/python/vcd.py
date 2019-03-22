@@ -20,21 +20,19 @@ class Event:
     value: int
 
 
-def read_toggles_vcd(vcd_filename, signal_filter=None, clock=1000, window=1):
-    logging.info("VCD file: %s, Window: %d", vcd_filename, window)
+def read_toggles_vcd(vcd_filename, signal_filter=None):
+    logging.info("VCD file: %s", vcd_filename)
     assert os.path.isfile(vcd_filename), "%s not found" % vcd_filename
-    cycle = 0
-    reset_cycle = 0
 
-    symbols = dict()        # type: Dict[str, int] # symbol -> idx
+    time = -1  # type: int
+    cycle = 0  # type: int
+    reset_cycle = 0  # type: int
+
+    symbols = dict()        # type: Dict[str, int] # symbol -> idx in bus_signals, widths, vcd_data
     bus_signals = list()    # type: List[str]
-    bus_toggles = list()    # type: List[deque]
-    bus_indices = list()    # type: List[deque]
     widths = list()         # type: List[int]
-
     vcd_data = None         # type: List[List[Event]]
 
-    time = -1
     with open(vcd_filename, "r") as _f:
         path = list()           # type: List[str]
         clock_value = None      # type: int
@@ -79,108 +77,49 @@ def read_toggles_vcd(vcd_filename, signal_filter=None, clock=1000, window=1):
                         symbols[symbol] = len(bus_signals)
                         widths.append(width)
                         bus_signals.append(signal)
-                        bus_toggles.append(deque())
-                        bus_indices.append(deque())
                     elif symbol in symbols:
                         assert False, "I've already seen this symbol {} for signal {}".format(symbol, signal)
                 # no more variable definitions
                 elif tokens[0] == "$enddefinitions":
                     assert tokens[1] == "$end"
-                    has_toggled = [False] * len(bus_signals)
-                    cur_toggles = [0] * len(bus_signals)
-                    cur_values = [0] * len(bus_signals)
-                    prev_values = [0] * len(bus_signals)
-                    path = list()
-                    print("$enddefinitions - bus_signals: {}".format(list(zip(bus_signals, widths))))
-
+                    vcd_data = [[] for _ in range(len(bus_signals))]
             # TODO: parse $dumpvars section for initial values of signals
             elif tokens[0][0] == '#':
-                # simulation time
                 time = int(tokens[0][1:])
-                # Clock Tick
-                if cycle > 0 and clock_value == '1':
-                    if reset_value == '1':
+                if cycle > 0 and clock_value == 1:
+                    if reset_value == 1:
                         reset_cycle += 1
-                    # update toggles
-                    for i, _t in enumerate(has_toggled):
-                        if _t:
-                            width = widths[i]
-                            value = cur_values[i]
-                            bus_diff = bin(value ^ prev_values[i]).count('1')
-                            cur_toggles[i] += bus_diff
-                            prev_values[i] = value
-                            has_toggled[i] = False
-
-                    if reset_value == '0' and ((cycle - reset_cycle) % window == 0):
-                        idx = (cycle - reset_cycle) / window - 1
-                        for i, (ids, ts, width) in enumerate(
-                                zip(bus_indices, bus_toggles, widths)):
-                            if cur_toggles[i] > 0:
-                                ids.append(idx)
-                                ts.append(cur_toggles[i])
-                                # ts.append(float(cur_toggles[i]) / (window * width))
-                                cur_toggles[i] = 0
             elif time >= 0 and tokens:
-                #################
-                # Update Values #
-                #################
                 if len(tokens) == 2:
                     assert tokens[0][0] == 'b'
-                    value = tokens[0][1:]
+                    value = int(tokens[0][1:], 2)
                     symbol = tokens[1]
-                elif len(tokens) == 1:
-                    value = tokens[0][0]
+                else:  # len(tokens) == 1
+                    assert len(tokens) == 1
+                    value = int(tokens[0][0])
                     symbol = tokens[0][1:]
-                #assert cycle == 0 or time % clock == 0 or \
-                #  symbol == clock_symbol or symbol == reset_symbol, \
-                #  "time: %d, clock: %d, symbol: %s" % (time, clock, symbol)
+
+                # BUG: if the clock symbol order is before the signal of interest, clock_value = 1 will be updated too late
+                # OK to solve this properly, we just need to parse first, then filter later
                 if symbol == clock_symbol:
                     clock_value = value
-                    if time > 0 and clock_value == '1':
+                    if time > 0 and clock_value == 1:
                         # clock tick
                         cycle += 1
-                if symbol == reset_symbol:
+                elif symbol == reset_symbol:
                     reset_value = value
-                elif cycle > 0 and clock_value == '1' and symbol in symbols:
+                elif cycle > 0 and clock_value == 1 and symbol in symbols:
                     # RTL signals tick at clock pos edges
+                    print(symbol)
+                    #assert symbol in symbols
                     idx = symbols[symbol]
-                    try:
-                        cur_values[idx] = int(value, 2)
-                    except ValueError:
-                        cur_values[idx] = int(value.replace('x', '0'), 2)
-                    has_toggled[idx] = True
+                    vcd_data[idx].append(Event(time, value))
 
-    # Leftovers
-    tail = (cycle - reset_cycle) % window
-    if tail != 0:
-        idx = (cycle - reset_cycle - 1) / window
-        for i, (ids, ts, width) in enumerate(zip(bus_indices, bus_toggles, widths)):
-            if cur_toggles[i] > 0:
-                ids.append(idx)
-                ts.append(cur_toggles[i])
-                # ts.append(float(cur_toggles[i]) / (width * tail))
-                cur_toggles[i] = 0
+    print(vcd_data)
+    print("$enddefinitions - bus_signals: {}".format(list(zip(bus_signals, widths))))
+    print(vcd_data[bus_signals.index("GCD.io_outputValid")])
 
-    indptr = [0]
-    for bus_index in bus_indices:
-        indptr.append(indptr[-1] + len(bus_index))
-
-    indices = list()
-    toggles = list()
-    for bus_index in bus_indices:
-        indices.extend(bus_index)
-    for bus_toggle in bus_toggles:
-        toggles.extend(bus_toggle)
-
-    widths = np.array(widths)
-    indptr = np.array(indptr, dtype=np.int64)
-    indices = np.array(indices, dtype=np.int64)
-    shape = len(bus_signals), int((cycle - reset_cycle - 1) / window) + 1
-    #print(toggles)
-    data = csr_matrix((toggles, indices, indptr), shape=shape)
-    #data = divide_csr(data, window * widths.reshape(-1, 1))
-
-    return cycle, reset_cycle, bus_signals, data, widths
+    return vcd_data
 
 
 if __name__ == "__main__":
