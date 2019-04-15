@@ -60,7 +60,8 @@ def read_vcd(vcd_filename: str, signal_filter: Set[str]) -> Dict[Signal, List[Ev
                         widths.append(width)
                         bus_signals.append(signal)
                     else:
-                        assert symbol not in symbols, "I've already seen this symbol {} for signal {}".format(symbol, signal)
+                        print("Found alias for signal {} as {}, ignoring".format(bus_signals[symbols[symbol]], signal))
+                        #assert symbol not in symbols, "I've already seen this symbol {} for signal {}".format(symbol, signal)
                 # no more variable definitions
                 elif tokens[0] == "$enddefinitions":
                     assert tokens[1] == "$end"
