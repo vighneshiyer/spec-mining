@@ -32,6 +32,7 @@ def sample_signal(sampling_times: List[int], signal: List[Event]) -> List[Event]
 
 
 # This pattern is only really legitimate when used with boolean control signals
+# TODO: mine_alternating should be false if a is a strict alias of b
 def mine_alternating(a: List[Event], b: List[Event]) -> bool:
     automaton_state = 0
     a_idx, b_idx = 0, 0

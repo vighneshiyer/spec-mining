@@ -11,7 +11,8 @@ if __name__ == "__main__":
 
     # Only sample signals at rising edge of the clock
     # TODO: Only pick out the top-level clock
-    clocks = list(filter(lambda x: 'clock' in x.name, vcd_data.keys()))
+    clock_names = {'clock', 'clk'}
+    clocks = list(filter(lambda x: any([name in x.name for name in clock_names]), vcd_data.keys()))
     assert len(clocks) == 1, "Found too many or no clocks. Got: {}".format(clocks)
     assert clocks[0].width == 1
     clock = clocks[0]

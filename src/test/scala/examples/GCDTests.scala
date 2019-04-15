@@ -1,11 +1,9 @@
 // See README.md for license details.
 
-package gcd
-
-import java.io.File
+package examples
 
 import chisel3.iotesters
-import chisel3.iotesters.{ChiselFlatSpec, Driver, PeekPokeTester}
+import chisel3.iotesters.{ChiselFlatSpec, PeekPokeTester}
 
 class GCDUnitTester(c: GCD) extends PeekPokeTester(c) {
   /**
@@ -64,7 +62,7 @@ class GCDUnitTester(c: GCD) extends PeekPokeTester(c) {
 class GCDTester extends ChiselFlatSpec {
   "GCDTester" should "generate a VCD trace" in {
     iotesters.Driver.execute(
-      Array("--generate-vcd-output", "on", "--target-dir", "vcd/gcd", "--top-name", "gcd"),
+      Array("--backend-name", "verilator", "--generate-vcd-output", "on", "--target-dir", "vcd/gcd", "--top-name", "gcd"),
       () => new GCD
     ) {
       c => new GCDUnitTester(c)
