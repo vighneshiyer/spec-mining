@@ -1,7 +1,8 @@
 import os.path
 import logging
-from typing import List, Dict, Set
+from typing import List, Dict, Set, Tuple, FrozenSet
 from dataclasses import dataclass
+from collections import defaultdict
 
 
 @dataclass(frozen=True)
@@ -19,17 +20,20 @@ class Signal:
 # There is a bug in the original version of read_vcd where if the clock symbol appears before the signal of interest
 # clock_value = 1 will be updated too late, and the signal toggle won't be caught (for signals driven on
 # negative edges from chisel-iotesters drivers. This may be an issue with internal signals too, but it
-# depends on the specifics of how the VCD is dumped from verilator.
-def read_vcd(vcd_filename: str, signal_filter: Set[str]) -> Dict[Signal, List[Event]]:
+# depends on the specifics of how the VCD is dumped from verilator. Solution: sample with a clock after
+# the entire VCD parsing is done.
+
+# There's another bug with signal_filter where a signal may have many aliases where a few have junk names (_T)
+# and one has a real name (wr_en). If we cut out the symbol too early when seeing an aliased name, we may not
+# record a signal which should have been recorded. Solution: strip signals after the VCD data is constructed.
+def read_vcd(vcd_filename: str) -> Dict[FrozenSet[Signal], List[Event]]:
     logging.info("VCD file: %s", vcd_filename)
     assert os.path.isfile(vcd_filename), "%s not found" % vcd_filename
 
     time = -1               # type: int
-    symbols = dict()        # type: Dict[str, int] # symbol -> idx in bus_signals, widths, vcd_data
-    ignore_symbols = set()  # type: Set[str]
-    bus_signals = list()    # type: List[str]
-    widths = list()         # type: List[int]
-    vcd_data = None         # type: List[List[Event]]
+    # Maps a symbol to a set of aliased signals and the signal's delta event trace.
+    # The Set[Signal] contains all the signals in the VCD that were aliased to one logical signal.
+    vcd_data = defaultdict(lambda: (set(), []))  # type: Dict[str, Tuple[Set[Signal], List[Event]]]
 
     with open(vcd_filename, "r") as _f:
         path = list()       # type: List[str]
@@ -52,20 +56,10 @@ def read_vcd(vcd_filename: str, signal_filter: Set[str]) -> Dict[Signal, List[Ev
                     symbol = tokens[3]
                     signal_name = tokens[4]
                     signal = ("%s.%s" % (".".join(path), signal_name))
-                    if any([x in signal for x in signal_filter]):
-                        ignore_symbols.add(symbol)
-                        continue
-                    if symbol not in symbols:
-                        symbols[symbol] = len(bus_signals)
-                        widths.append(width)
-                        bus_signals.append(signal)
-                    else:
-                        print("Found alias for signal {} as {}, ignoring".format(bus_signals[symbols[symbol]], signal))
-                        #assert symbol not in symbols, "I've already seen this symbol {} for signal {}".format(symbol, signal)
+                    vcd_data[symbol][0].add(Signal(signal, width))
                 # no more variable definitions
                 elif tokens[0] == "$enddefinitions":
                     assert tokens[1] == "$end"
-                    vcd_data = [[] for _ in range(len(bus_signals))]
             # TODO: parse $dumpvars section for initial values of signals
             elif tokens[0][0] == '#':
                 time = int(tokens[0][1:])
@@ -78,10 +72,5 @@ def read_vcd(vcd_filename: str, signal_filter: Set[str]) -> Dict[Signal, List[Ev
                     assert len(tokens) == 1
                     value = int(tokens[0][0])
                     symbol = tokens[0][1:]
-                if symbol in ignore_symbols:
-                    continue
-                assert(symbol in symbols)
-                idx = symbols[symbol]
-                vcd_data[idx].append(Event(time, value))
-
-    return {Signal(s[0], s[1]): s[2] for s in zip(bus_signals, widths, vcd_data)}
+                vcd_data[symbol][1].append(Event(time, value))
+    return {frozenset(data[0]): data[1] for (symbol, data) in vcd_data.items()}
