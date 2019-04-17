@@ -42,8 +42,12 @@ def sample_signal(clock: List[Event], signal: List[Event]) -> List[Event]:
 
 
 # This pattern is only really legitimate when used with boolean control signals
-# TODO: mine_alternating should be false if a is a strict alias of b
 def mine_alternating(a: List[Event], b: List[Event]) -> bool:
+    # If a == b, they have identical events, and although are strictly alternating, that
+    # strict definition is useless for verification since a and b are identically sourced
+    # TODO: check whether this is reasonable
+    if a == b:
+        return False
     automaton_state = 0
     a_idx, b_idx = 0, 0
     while a_idx < len(a) or b_idx < len(b):
@@ -73,6 +77,43 @@ def mine_alternating(a: List[Event], b: List[Event]) -> bool:
     return automaton_state == 0
 
 
+def mine_next(a: List[Event], b: List[Event], clk_period: int) -> bool:
+    automaton_state = 0
+    patterns_seen = 0
+    a_event_time = 0
+    a_idx, b_idx = 0, 0
+    while a_idx < len(a) or b_idx < len(b):
+        # received an 'a' and 'b' on the same cycle
+        if a_idx < len(a) and b_idx < len(b) and a[a_idx].time == b[b_idx].time:
+            a_event_time = a[a_idx].time
+            a_idx = a_idx + 1
+            b_idx = b_idx + 1
+            if automaton_state == 0: automaton_state = 1
+        # received an 'a' event and NOT an 'b' event
+        elif (a_idx < len(a) and b_idx < len(b) and a[a_idx].time < b[b_idx].time) \
+                or (b_idx == len(b) and a_idx < len(a)):
+            if automaton_state == 0: automaton_state = 1
+            elif automaton_state == 1: return False  # didn't get a 'b' NEXT 'a'
+            a_event_time = a[a_idx].time
+            a_idx = a_idx + 1
+        # received an 'b' event and NOT an 'a' event
+        elif a_idx < len(a) and b_idx < len(b) and a[a_idx].time > b[b_idx].time \
+                or (a_idx == len(a) and b_idx < len(b)):
+            if automaton_state == 1 and b[b_idx].time == a_event_time + clk_period:
+                automaton_state = 0
+                b_idx = b_idx + 1
+                patterns_seen = patterns_seen + 1
+            elif automaton_state == 0:
+                automaton_state = 0
+                b_idx = b_idx + 1
+            else:
+                return False  # didn't get a 'b' NEXT 'a', but rather more than 1 clock
+        else:
+            print(a_idx, b_idx, automaton_state)
+            assert False, "should not get here"
+    return (automaton_state == 0 or automaton_state == 1) and patterns_seen > 0
+
+
 if __name__ == "__main__":
     print("TESTING: sample_signal")
     # Case 1: data changes at same timestep as clock
@@ -91,4 +132,16 @@ if __name__ == "__main__":
     assert(mine_alternating(
         [Event(0, 1), Event(5, 0), Event(10, 1)],
         [Event(1, 0), Event(6, 1), Event(11, 0)]
+    ))
+
+    print("TESTING: mine_next")
+    assert(mine_next(
+        [Event(2, 1), Event(6, 0)],
+        [Event(4, 0), Event(8, 1)],
+        2
+    ))
+    assert(not mine_next(
+        [Event(2, 1), Event(6, 0)],
+        [Event(8, 0)],
+        2
     ))

@@ -1,7 +1,7 @@
 import sys
 import itertools
 from vcd import read_vcd, Signal
-from analysis import sample_signal, mine_alternating
+from analysis import sample_signal, mine_alternating, mine_next
 import pprint
 import argparse
 
@@ -14,11 +14,11 @@ if __name__ == "__main__":
 
     vcd_data = read_vcd(args.vcd_file[0])
 
-    # TODO: Only pick out the top-level clock
+    # TODO: Only pick out the top-level clock, this doesn't work for rocket-chip
     clock_names = {'clock', 'clk'}
     clocks = list(filter(
         lambda signal_set: any(['clk' in signal.name or 'clock' in signal.name for signal in signal_set]), vcd_data.keys()))
-    assert len(clocks) == 1, "Found too many or no clocks. Got: {}".format(clocks)
+    assert len(clocks) == 1, "Found too many or no clocks. Got: {}".format(pprint.pformat(clocks))
     assert all([c.width == 1 for c in clocks[0]]), "All clock signals better have a width of 1"
     clock = clocks[0]
     print("Found clock {}".format(clock))
@@ -50,9 +50,15 @@ if __name__ == "__main__":
     pp = pprint.PrettyPrinter(indent=4)
     pp.pprint({", ".join(map(lambda s: s.name, signal)): len(data) for (signal, data) in vcd_data_sampled.items()})
 
-    # Mine: a A a, a alternates with b where a and b are delta events
+    # Mine properties
     for combo in itertools.combinations(vcd_data_sampled.keys(), 2):
+        # Only mine for small signals (like in the paper)
+        if list(combo[0])[0].width > 4 or list(combo[1])[0].width > 4:
+            continue
+        combo_str = [[s.name for s in signal_set] for signal_set in combo]
         alternating_valid = mine_alternating(vcd_data_sampled[combo[0]], vcd_data_sampled[combo[1]])
         if alternating_valid:
-            combo_str = [[s.name for s in signal_set] for signal_set in combo]
             print("Alternating: {}".format(combo_str))
+        next_valid = mine_next(vcd_data_sampled[combo[0]], vcd_data_sampled[combo[1]], 2)
+        if next_valid:
+            print("Next: {}".format(combo_str))
