@@ -338,3 +338,14 @@ project/plugins/project/
 # virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
 hs_err_pid*
 .mypy_cache
+
+*.aux
+*.log
+*.out
+*.ipynb_checkpoints
+*minted*
+*.bbl
+*.bcf
+*.blg
+*.run.xml
+__pycache__

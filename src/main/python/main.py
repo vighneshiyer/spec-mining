@@ -1,16 +1,18 @@
-import sys
 import itertools
 from vcd import read_vcd, Signal
 from analysis import sample_signal, mine_alternating, mine_next
 import pprint
 import argparse
+from typing import List, FrozenSet, Dict, Set
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--start-time', type=int, default=0)
+    parser.add_argument('--signal-bit-limit', type=int, default=5)
     parser.add_argument('vcd_file', type=str, nargs=1)
     args = parser.parse_args()
+    print("Miner called with arguments: {}".format(args))
 
     vcd_data = read_vcd(args.vcd_file[0])
 
@@ -32,19 +34,30 @@ if __name__ == "__main__":
     for signal, events in vcd_data_sampled.items():
         vcd_data_sampled[signal] = list(filter(lambda e: e.time > args.start_time, events))
 
-    # Remove signals that should be ignored
-    ignore_signals = {'_RAND', '_GEN', '_T', 'reset'}
-    ignore_keys = []
+    # Delete keys entirely that consist of *only* Chisel temporary/junk signals
+    # Trim all other keys of signals which are Chisel temporary/junk signals
+    keys_to_delete = []  # type: List[FrozenSet[Signal]]
+    keys_to_trim = {}  # type: Dict[FrozenSet[Signal], Set[Signal]]
 
     def ignore_sig(sig: Signal) -> bool:
-        return any([ignore_str in sig.name for ignore_str in ignore_signals])
+        signals_to_ignore = {'_RAND', '_GEN', '_T', 'reset'}
+        return any([ignore_str in sig.name for ignore_str in signals_to_ignore])
 
     for signal_set in vcd_data_sampled.keys():
-        if all([ignore_sig(sig) for sig in signal_set]):
-            ignore_keys.append(signal_set)
+        ignored_signals = set(filter(lambda sig: ignore_sig(sig), signal_set))
+        if len(ignored_signals) == len(signal_set):
+            # If all Signals in this key are junk, then delete the entire key
+            keys_to_delete.append(signal_set)
+        else:
+            # Otherwise, only some Signals in this key need to be junked
+            keys_to_trim[signal_set] = ignored_signals
 
-    for ignore_key in ignore_keys:
-        del vcd_data_sampled[ignore_key]
+    for key_to_delete in keys_to_delete:
+        del vcd_data_sampled[key_to_delete]
+
+    for (key_to_trim, set_of_junk_signals) in keys_to_trim.items():
+        new_set = key_to_trim - set_of_junk_signals
+        vcd_data_sampled[new_set] = vcd_data_sampled.pop(key_to_trim)
 
     print("Found events for these signals:")
     pp = pprint.PrettyPrinter(indent=4)
@@ -53,12 +66,13 @@ if __name__ == "__main__":
     # Mine properties
     for combo in itertools.combinations(vcd_data_sampled.keys(), 2):
         # Only mine for small signals (like in the paper)
-        if list(combo[0])[0].width > 4 or list(combo[1])[0].width > 4:
+        if list(combo[0])[0].width > args.signal_bit_limit or list(combo[1])[0].width > args.signal_bit_limit:
             continue
         combo_str = [[s.name for s in signal_set] for signal_set in combo]
         alternating_valid = mine_alternating(vcd_data_sampled[combo[0]], vcd_data_sampled[combo[1]])
         if alternating_valid:
             print("Alternating: {}".format(combo_str))
+        # TODO: mine_next requires all PERMUTATIONS of the design signals be tried, not merely combinations
         next_valid = mine_next(vcd_data_sampled[combo[0]], vcd_data_sampled[combo[1]], 2)
         if next_valid:
             print("Next: {}".format(combo_str))

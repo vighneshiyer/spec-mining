@@ -1,0 +1,71 @@
+@article{Foster,
+abstract = {Technical publications often make either subjective or unsubstantiated claims about today's functional verification process-such as, 70 percent of a project's overall effort is spent in verification. Yet, there are very few credible industry studies that quantitatively provide insight into the functional verification process in terms of verification technology adoption, effort, and effectiveness. To address this dearth of knowledge, a recent worldwide , double-blind, functional verification study was conducted, covering all electronic industry market segments. To our knowledge, this is the largest independent functional verification study ever conducted. This paper presents the findings from our 2014 study and provides invaluable insight into the state of the electronic industry today in terms of both design and verification trends.},
+author = {Foster, Harry D},
+doi = {10.1145/2745404.2751548Technical},
+file = {:home/vighnesh/.local/share/data/Mendeley Ltd./Mendeley Desktop/Downloaded/Foster - Unknown - Trends in Functional Verification A 2014 Industry Study.pdf:pdf},
+keywords = {B63 [Logic Design]: Design Aids-Verification General Terms Design,Languages,Standardization,Verification Effort,Verification Keywords Functional Verification Trends},
+title = {{Trends in Functional Verification: A 2014 Industry Study}},
+url = {http://dx.doi.org/10.1145/2745404.2751548Technical}
+}
+@inproceedings{Li2010,
+abstract = {Effective system verification requires good specifications. The lack of sufficient specifications can lead to misses of critical bugs, design re-spins, and time-to-market slips. In this paper, we present a new technique for mining temporal specifications from simulation or execution traces of a digital hardware design. Given an execution trace, we mine recurring temporal behaviors in the trace that match a set of pattern templates. Subsequently, we synthesize them into complex patterns by merging events in time and chaining the patterns using inference rules. We specifically designed our algorithm to make it highly efficient and meaningful for digital circuits. In addition, we propose a pattern-mining diagnosis framework where specifications mined from correct and erroneous traces are used to automatically localize an error. We demonstrate the effectiveness of our approach on industrial-size examples by mining specifications from traces of over a million cycles in a few minutes and use them to successfully localize errors of different types to within module boundaries.},
+author = {Li, Wenchao and Forin, Alessandro and Seshia, Sanjit A.},
+doi = {10.1145/1837274.1837466},
+file = {:home/vighnesh/.local/share/data/Mendeley Ltd./Mendeley Desktop/Downloaded/Li, Forin, Seshia - 2010 - Scalable specification mining for verification and diagnosis.pdf:pdf},
+title = {{Scalable specification mining for verification and diagnosis}},
+year = {2010}
+}
+@techreport{Li2014,
+author = {Li, Wenchao},
+file = {:home/vighnesh/.local/share/data/Mendeley Ltd./Mendeley Desktop/Downloaded/Li - 2014 - Specification Mining New Formalisms, Algorithms and Applications.pdf:pdf},
+title = {{Specification Mining: New Formalisms, Algorithms and Applications}},
+url = {http://www.eecs.berkeley.edu/Pubs/TechRpts/2014/EECS-2014-20.html},
+year = {2014}
+}
+@techreport{Mirzaeian,
+abstract = {We propose a novel methodology for design error diagnosis in the HDL description using a word-level solver. In this approach, the patterns that result in erroneous responses are first used to limit the number of initial error candidates. The RTL description of the design is then modified by adding one multiplexer to each of the possible error locations. For each of the erroneous pattern, the input pattern and the expected correct response are then imposed as constraints to the modified RTL model, resulting in a formula suitable for word-level satisfiability (SAT) solving. The solutions reported by the word-level SAT solver would indicate the potential error candidates. This constraint solving process iterates for each erroneous pattern, eventually resulting in a small set of error candidates. This method is sufficiently flexible to address both single-error and multiple-error diagnosis. We present experimental results for a set ofpublic RTL benchmark designs to demonstrate the effectiveness ofthis proposed approach.},
+author = {Mirzaeian, Saeed and Zheng, Feijun and {Tim Cheng}, K-t},
+file = {:home/vighnesh/.local/share/data/Mendeley Ltd./Mendeley Desktop/Downloaded/Mirzaeian, Zheng, Tim Cheng - Unknown - RTL Error Diagnosis Using a Word-Level SAT-Solver.pdf:pdf},
+title = {{RTL Error Diagnosis Using a Word-Level SAT-Solver}}
+}
+@inproceedings{Veneris2003,
+abstract = {Recent advances in Boolean satisfiability have made it an attractive engine for solving many digital very-large-scale-integration design problems. Although useful in many stages of the design cycle, fault diagnosis and logic debugging have not been addressed within a satisfiability-based framework. This work proposes a novel Boolean satisfiability-based method for multiple-fault diagnosis and multiple-design-error diagnosis in combinational and sequential circuits. A number of heuristics are presented that keep the method memory and run-time efficient. An extensive suite of experiments on large circuits corrupted with different types of faults and errors confirm its robustness and practicality. They also suggest that satisfiability captures significant characteristics of the problem of diagnosis and encourage novel research in satisfiability-based diagnosis as a complementary process to design verification.},
+author = {Veneris, A.},
+booktitle = {Proceedings - International Workshop on Microprocessor Test and Verification},
+doi = {10.1109/MTV.2003.1250264},
+file = {:home/vighnesh/.local/share/data/Mendeley Ltd./Mendeley Desktop/Downloaded/Veneris - 2003 - Fault diagnosis and logic debugging using Boolean satisfiability.pdf:pdf},
+isbn = {0769520456},
+issn = {15504093},
+keywords = {Boolean functions,Bridge circuits,Circuit faults,Circuit testing,Debugging,Dictionaries,Fault diagnosis,Hardware design languages,Logic design,Very large scale integration},
+title = {{Fault diagnosis and logic debugging using Boolean satisfiability}},
+year = {2003}
+}
+@inproceedings{Chang2007,
+author = {Chang, Kai Hui and Wagner, Ilya and Bertacco, Valeria and Markov, Igor L.},
+booktitle = {Proceedings - IEEE International High-Level Design Validation and Test Workshop, HLDVT},
+doi = {10.1109/HLDVT.2007.4392789},
+file = {:home/vighnesh/.local/share/data/Mendeley Ltd./Mendeley Desktop/Downloaded/Chang et al. - 2007 - Automatic error diagnosis and correction for RTL designs.pdf:pdf},
+isbn = {1424414806},
+issn = {15526674},
+title = {{Automatic error diagnosis and correction for RTL designs}},
+year = {2007}
+}
+@inproceedings{Kim2018,
+abstract = {We present DESSERT, an FPGA-accelerated methodology for simulation-based RTL verification. The RTL design is automatically transformed and instrumented to allow deterministic simulation on the FPGA with initialization and state snapshot capture. Assert statements, which are present in RTL for error checking in software simulation, are automatically synthesized for quick hardware-based error checking. Print statements in the RTL design are also automatically transformed to generate logs from the FPGA, which are compared on the fly against a functional golden-model software simulator for more exhaustive error checking. To rapidly provide waveforms for debugging, two parallel deterministic FPGA-accelerated RTL simulations are run spaced apart in simulation time to support capture and replay of state snapshots immediately before an error. We demonstrate DESSERT, running on public-cloud FPGAs at extremely low cost, by catching bugs in a complex out-of-order processor hundreds of billions of cycles into SPEC2006int benchmarks running under Linux.},
+author = {Kim, Donggyu and Celio, Christopher and Karandikar, Sagar and Biancolin, David and Bachrach, Jonathan and Asanovic, Krste},
+booktitle = {Proceedings - 2018 International Conference on Field-Programmable Logic and Applications, FPL 2018},
+doi = {10.1109/FPL.2018.00021},
+file = {:home/vighnesh/.local/share/data/Mendeley Ltd./Mendeley Desktop/Downloaded/Kim et al. - 2018 - DESSERT Debugging RTL effectively with state snapshotting for error replays across trillions of cycles.pdf:pdf},
+isbn = {9781538685174},
+keywords = {FPGA-accelerated simulation,RTL debugging,hardware verification,simulation-based verification},
+title = {{DESSERT: Debugging RTL effectively with state snapshotting for error replays across trillions of cycles}},
+year = {2018}
+}
+@inproceedings{Tuohy2013,
+abstract = {We present GOLDMINE, a methodology for generating assertions automatically. Our method involves a combination of data mining and static analysis of the Register Transfer Level (RTL) design. We present results of using GoldMine for assertion generation of the RTL of a 1000-core processor design that is still in an evolving stage. Our results show that GoldMine can generate complex, high coverage assertions in RTL, thereby minimizing human effort in this process.},
+author = {Tuohy, Bill and Johnson, Daniel and Vasudevan, Shobha and Tcheng, David and Patel, Sanjay and Sheridan, David},
+doi = {10.1109/date.2010.5457129},
+file = {:home/vighnesh/.local/share/data/Mendeley Ltd./Mendeley Desktop/Downloaded/Tuohy et al. - 2013 - GoldMine Automatic assertion generation using data mining and static analysis.pdf:pdf},
+title = {{GoldMine: Automatic assertion generation using data mining and static analysis}},
+year = {2013}
+}
