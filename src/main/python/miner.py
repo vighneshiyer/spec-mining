@@ -1,6 +1,5 @@
-import itertools
 from vcd import read_vcd, Signal
-from analysis import sample_signal, mine_alternating, mine_next
+from analysis import sample_signal, mine
 import pprint
 import argparse
 from typing import List, FrozenSet, Dict, Set
@@ -14,10 +13,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
     print("Miner called with arguments: {}".format(args))
 
-    vcd_data = read_vcd(args.vcd_file[0])
+    module_tree, vcd_data = read_vcd(args.vcd_file[0])
 
     # TODO: Only pick out the top-level clock, this doesn't work for rocket-chip
-    clock_names = {'clock', 'clk'}
     clocks = list(filter(
         lambda signal_set: any(['clk' in signal.name or 'clock' in signal.name for signal in signal_set]), vcd_data.keys()))
     assert len(clocks) == 1, "Found too many or no clocks. Got: {}".format(pprint.pformat(clocks))
@@ -59,20 +57,17 @@ if __name__ == "__main__":
         new_set = key_to_trim - set_of_junk_signals
         vcd_data_sampled[new_set] = vcd_data_sampled.pop(key_to_trim)
 
+    # Trim off signals that have no delta events or are too wide
+    vcd_data_cleaned = {signal_set: trace for (signal_set, trace) in vcd_data_sampled.items()
+                        if len(trace) > 0 and list(signal_set)[0].width <= args.signal_bit_limit}
+
     print("Found events for these signals:")
     pp = pprint.PrettyPrinter(indent=4)
-    pp.pprint({", ".join(map(lambda s: s.name, signal)): len(data) for (signal, data) in vcd_data_sampled.items()})
+    pp.pprint({", ".join(map(lambda s: s.name, signal)): len(data) for (signal, data) in vcd_data_cleaned.items()})
 
-    # Mine properties
-    for combo in itertools.combinations(vcd_data_sampled.keys(), 2):
-        # Only mine for small signals (like in the paper)
-        if list(combo[0])[0].width > args.signal_bit_limit or list(combo[1])[0].width > args.signal_bit_limit:
-            continue
-        combo_str = [[s.name for s in signal_set] for signal_set in combo]
-        alternating_valid = mine_alternating(vcd_data_sampled[combo[0]], vcd_data_sampled[combo[1]])
-        if alternating_valid:
-            print("Alternating: {}".format(combo_str))
-        # TODO: mine_next requires all PERMUTATIONS of the design signals be tried, not merely combinations
-        next_valid = mine_next(vcd_data_sampled[combo[0]], vcd_data_sampled[combo[1]], 2)
-        if next_valid:
-            print("Next: {}".format(combo_str))
+    # Walk the module tree with DFS (iterative preorder traversal)
+    module_queue = [module_tree]
+    while len(module_queue) > 0:
+        module = module_queue.pop()
+        mine(module, vcd_data_cleaned)
+        module_queue.extend(module.children)

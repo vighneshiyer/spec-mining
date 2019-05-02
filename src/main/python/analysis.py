@@ -1,5 +1,6 @@
-from vcd import Event
-from typing import List
+from vcd import Event, Module, Signal
+from typing import List, FrozenSet, Dict
+import itertools
 
 
 def sample_signal(clock: List[Event], signal: List[Event]) -> List[Event]:
@@ -112,6 +113,28 @@ def mine_next(a: List[Event], b: List[Event], clk_period: int) -> bool:
             print(a_idx, b_idx, automaton_state)
             assert False, "should not get here"
     return (automaton_state == 0 or automaton_state == 1) and patterns_seen > 0
+
+
+def mine(module: Module, vcd_data: Dict[FrozenSet[Signal], List[Event]]):
+    # Strip vcd_data so it only contains signals that are directly inside this module
+    # and only mine permutations of signals directly inside a given module instance
+    def signal_in_module(signal: str, module: str):
+        last_dot = signal.rfind('.')
+        signal_root = signal[0:last_dot]
+        return signal_root == module
+
+    vcd_data_scoped = {signal_set: trace for (signal_set, trace) in vcd_data.items()
+                       if any([signal_in_module(s.name, module.name) for s in signal_set])}
+
+    print("MODULE = {}".format(module.name))
+    for combo in itertools.permutations(vcd_data_scoped.keys(), 2):
+        combo_str = [[s.name for s in signal_set] for signal_set in combo]
+        alternating_valid = mine_alternating(vcd_data_scoped[combo[0]], vcd_data_scoped[combo[1]])
+        if alternating_valid:
+            print("Alternating: {}".format(combo_str))
+        next_valid = mine_next(vcd_data_scoped[combo[0]], vcd_data_scoped[combo[1]], 2)
+        if next_valid:
+            print("Next: {}".format(combo_str))
 
 
 if __name__ == "__main__":

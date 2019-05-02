@@ -1,25 +1,26 @@
-import sys, pprint
 import os.path
 import logging
 from typing import List, Dict, Set, Tuple, FrozenSet
-from dataclasses import dataclass
 from collections import defaultdict
 
 
-@dataclass(frozen=True)
 class Event:
-    time: int
-    value: int
+    def __init__(self, time: int, value: int) -> None:
+        self.time = time
+        self.value = value
 
 
-@dataclass(frozen=True)
 class Signal:
-    name: str
-    width: int
+    def __init__(self, name: str, width: int) -> None:
+        self.name = name
+        self.width = width
+
+    def __repr__(self) -> str:
+        return "Signal({},{})".format(self.name, self.width)
 
 
 class Module:
-    def __init__(self, name):
+    def __init__(self, name: str) -> None:
         self.name = name
         self.children = []  # type: List[Module]
 
@@ -34,17 +35,20 @@ class Module:
     def __str__(self):
         return self.str_helper(1)
 
+    def __repr__(self):
+        return self.str_helper(1)
+
 
 # There is a bug in the original version of read_vcd where if the clock symbol appears before the signal of interest
 # clock_value = 1 will be updated too late, and the signal toggle won't be caught (for signals driven on
-# negative edges from chisel-iotesters drivers. This may be an issue with internal signals too, but it
-# depends on the specifics of how the VCD is dumped from verilator. Solution: sample with a clock after
+# negative edges from chisel-iotesters drivers (and maybe others). This may be an issue with internal signals too,
+# but it depends on the specifics of how the VCD is dumped from verilator. Solution: sample with a clock after
 # the entire VCD parsing is done.
 
 # There's another bug with signal_filter where a signal may have many aliases where a few have junk names (_T)
 # and one has a real name (wr_en). If we cut out the symbol too early when seeing an aliased name, we may not
 # record a signal which should have been recorded. Solution: strip signals after the VCD data is constructed.
-def read_vcd(vcd_filename: str) -> Dict[FrozenSet[Signal], List[Event]]:
+def read_vcd(vcd_filename: str) -> Tuple[Module, Dict[FrozenSet[Signal], List[Event]]]:
     logging.info("VCD file: %s", vcd_filename)
     assert os.path.isfile(vcd_filename), "%s not found" % vcd_filename
 
@@ -55,7 +59,7 @@ def read_vcd(vcd_filename: str) -> Dict[FrozenSet[Signal], List[Event]]:
 
     with open(vcd_filename, "r") as _f:
         path = list()       # type: List[str]
-        module_tree = [Module("VCD_TOP")]  # type: List[Module]
+        module_tree = []    # type: List[Module]
         for line in _f:
             tokens = line.split()
             if not tokens:
@@ -66,13 +70,18 @@ def read_vcd(vcd_filename: str) -> Dict[FrozenSet[Signal], List[Event]]:
                     assert tokens[1] == "module"
                     assert tokens[3] == "$end"
                     path.append(tokens[2])
-                    this_module = Module(tokens[2])
-                    module_tree[-1].children.append(this_module)
-                    module_tree.append(this_module)
+                    if len(module_tree) > 0:
+                        this_module = Module(module_tree[-1].name + "." + tokens[2])
+                        module_tree[-1].children.append(this_module)
+                        module_tree.append(this_module)
+                    else:  # This is the top-level module
+                        this_module = Module(tokens[2])
+                        module_tree.append(this_module)
                 # move up to the upper module instance
                 elif tokens[0] == "$upscope":
                     path = path[:-1]
-                    module_tree = module_tree[:-1]
+                    if len(module_tree) > 1:  # Don't remove the top-level module from the stack
+                        module_tree = module_tree[:-1]
                 # signal definition
                 elif tokens[0] == "$var":
                     width = int(tokens[2])
@@ -98,8 +107,6 @@ def read_vcd(vcd_filename: str) -> Dict[FrozenSet[Signal], List[Event]]:
                 vcd_data[symbol][1].append(Event(time, value))
 
     assert len(module_tree) == 1
-    assert module_tree[0].name == "VCD_TOP"
-    assert len(module_tree[0].children) == 1
-    module_tree = module_tree[0].children[0]
-    print("Module hierarchy: \n{}".format(module_tree))
-    return {frozenset(data[0]): data[1] for (symbol, data) in vcd_data.items()}
+    final_module_tree = module_tree[0]
+    print("Module hierarchy: \n{}".format(final_module_tree))
+    return final_module_tree, {frozenset(data[0]): data[1] for (symbol, data) in vcd_data.items()}

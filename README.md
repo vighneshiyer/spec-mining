@@ -61,3 +61,8 @@ python main.py --start-time 10 --signal-bit-width 5 /path/to/riscv-mini/outputs/
     - Try to get this working on a complex design (like riscv-mini) right away and see if the existing templates work out when introducing a bug which only impacts the execution trace a bit after the actual bug impacts the design (like a prefetcher bug which only manifests in a high-level property failure after the program fetches the bad data)
     - Then you can figure out if the spec mining engine fails, what needs work: is it the limitation of the templates in mining interesting properties, or is this methodology not tenable in the first place
 
+# 4/29/2019
+- Planning to publish to MEMOCODE
+- Abstract deadline on May 31st, paper one week later
+- OK to publish a work-in-progress paper if we don't have anything impressive
+- Donggyu suggests to modify `riscv-mini/CSR.scala` line 206 about `isEbreak` which should cause failure of a `rv32mi` test. Plan to gather specs on the golden riscv-mini, then introduce the bug and replay the failing test while monitoring for the specs to be violated. Hopefully should be caught.
