@@ -1,18 +1,7 @@
 from vcd import Event, Module, Signal
-from typing import List, FrozenSet, Dict, Tuple, Iterator, Optional
+from typing import List, FrozenSet, Dict, Tuple, Iterator, Optional, Set, Callable
 import itertools
 from dataclasses import dataclass
-
-
-@dataclass(frozen=True)
-class Property:
-    a: FrozenSet[Signal]
-    b: FrozenSet[Signal]
-
-
-@dataclass(frozen=True)
-class Alternating(Property):
-    pass
 
 
 @dataclass(frozen=True)
@@ -20,6 +9,37 @@ class PropertyStats:
     support: int
     falsifiable: bool
     falsified: bool
+
+
+@dataclass(frozen=True)
+class Property:
+    a: FrozenSet[Signal]
+    b: FrozenSet[Signal]
+    stats: PropertyStats
+
+
+@dataclass(frozen=True)
+class Alternating(Property):
+    def __repr__(self) -> str:
+        return "Alternating {} -> {}, support = {}".format(self.a, self.b, self.stats.support)
+
+
+@dataclass(frozen=True)
+class Next(Property):
+    def __repr__(self) -> str:
+        return "Next {} -> {}, support = {}".format(self.a, self.b, self.stats.support)
+
+
+@dataclass(frozen=True)
+class Until(Property):
+    def __repr__(self) -> str:
+        return "Until {} -> {}, support = {}".format(self.a, self.b, self.stats.support)
+
+
+@dataclass(frozen=True)
+class Eventual(Property):
+    def __repr__(self) -> str:
+        return "Eventual {} -> {}, support = {}".format(self.a, self.b, self.stats.support)
 
 
 # Combine a and b delta traces into 1 delta trace which consists of tuples indicating
@@ -114,7 +134,7 @@ def mine_alternating(a: List[Event], b: List[Event]) -> PropertyStats:
     return PropertyStats(support=support, falsifiable=falsifiable, falsified=False)
 
 
-def mine_next(a: List[Event], b: List[Event], clk_period: int) -> PropertyStats:
+def mine_next(a: List[Event], b: List[Event], clk_period: int = 2) -> PropertyStats:
     automaton_state = 0
     falsifiable, support = False, 0
     a_event_time = 0
@@ -178,7 +198,7 @@ def mine_evenutual(a: List[Event], b: List[Event]) -> PropertyStats:
         else:
             assert False, "should not get here"
     # This property can never be falsified, so the support is the primary indicator of usefulness
-    return PropertyStats(support=support, falsifiable=falsifiable, falsified=False)
+    return PropertyStats(support=support, falsifiable=support > 0, falsified=False)
 
 
 def mine_until(a: List[Event], b: List[Event]) -> PropertyStats:
@@ -196,7 +216,8 @@ def mine_until(a: List[Event], b: List[Event]) -> PropertyStats:
             if automaton_state == 0:
                 automaton_state = 1
                 falsifiable = True
-            # In state == 1, we have already seen delta a and if we see another delta a, then a didn't remain stable until b toggled
+            # In state == 1, we have already seen delta a and if we see another delta a,
+            # then a didn't remain stable until b toggled
             elif automaton_state == 1:
                 return PropertyStats(support=support, falsifiable=falsifiable, falsified=True)
         elif t[0] is None and t[1] is not None:
@@ -210,7 +231,7 @@ def mine_until(a: List[Event], b: List[Event]) -> PropertyStats:
     return PropertyStats(support=support, falsifiable=falsifiable, falsified=False)
 
 
-def mine(module: Module, vcd_data: Dict[FrozenSet[Signal], List[Event]]):
+def mine(module: Module, vcd_data: Dict[FrozenSet[Signal], List[Event]]) -> Set[Property]:
     # Strip vcd_data so it only contains signals that are directly inside this module
     # and only mine permutations of signals directly inside a given module instance
     def signal_in_module(signal: str, module: str):
@@ -221,21 +242,16 @@ def mine(module: Module, vcd_data: Dict[FrozenSet[Signal], List[Event]]):
     vcd_data_scoped = {signal_set: trace for (signal_set, trace) in vcd_data.items()
                        if any([signal_in_module(s.name, module.name) for s in signal_set])}
 
-    print("MODULE = {}".format(module.name))
+    ret_set = set()
+    miners = [mine_alternating, mine_next, mine_evenutual, mine_until]  # type: List[Callable[[List[Event], List[Event]], PropertyStats]]
+    property_classes = [Alternating, Next, Eventual, Until]
+    print("Mining module = {}".format(module.name))
     for combo in itertools.permutations(vcd_data_scoped.keys(), 2):
-        combo_str = [[s.name for s in signal_set] for signal_set in combo]
-        alternating = mine_alternating(vcd_data_scoped[combo[0]], vcd_data_scoped[combo[1]])
-        if alternating.falsifiable and not alternating.falsified:
-            print("Alternating: {}, support {}".format(combo_str, alternating.support))
-        next = mine_next(vcd_data_scoped[combo[0]], vcd_data_scoped[combo[1]], 2)
-        if next.falsifiable and not next.falsified:
-            print("Next: {}, support {}".format(combo_str, next.support))
-        eventual = mine_evenutual(vcd_data_scoped[combo[0]], vcd_data_scoped[combo[1]])
-        if eventual.falsifiable and eventual.support > 0:
-            print("Eventual: {}, support {}".format(combo_str, eventual.support))
-        until = mine_until(vcd_data_scoped[combo[0]], vcd_data_scoped[combo[1]])
-        if until.falsifiable and not until.falsified:
-            print("Until: {}, support {}".format(combo_str, until.support))
+        for (miner, property_class) in zip(miners, property_classes):
+            pattern_stats = miner(vcd_data_scoped[combo[0]], vcd_data_scoped[combo[1]])
+            if pattern_stats.falsifiable:
+                ret_set.add(property_class(frozenset(combo[0]), frozenset(combo[1]), pattern_stats))
+    return ret_set
 
 
 if __name__ == "__main__":

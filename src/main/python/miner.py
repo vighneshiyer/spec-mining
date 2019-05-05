@@ -1,5 +1,5 @@
 from vcd import read_vcd, Signal
-from analysis import sample_signal, mine
+from analysis import sample_signal, mine, Property
 import pprint
 import argparse
 from typing import List, FrozenSet, Dict, Set
@@ -55,8 +55,8 @@ if __name__ == "__main__":
 
     for (key_to_trim, set_of_junk_signals) in keys_to_trim.items():
         # TODO: hack hack hack, stick with set or tuple, don't mess with both combined
-        new_set = set(key_to_trim) - set_of_junk_signals
-        vcd_data_sampled[tuple(new_set)] = vcd_data_sampled.pop(key_to_trim)
+        new_set = key_to_trim - set_of_junk_signals
+        vcd_data_sampled[new_set] = vcd_data_sampled.pop(key_to_trim)
 
     # Trim off signals that have no delta events or are too wide
     vcd_data_cleaned = {signal_set: trace for (signal_set, trace) in vcd_data_sampled.items()
@@ -68,7 +68,12 @@ if __name__ == "__main__":
 
     # Walk the module tree with DFS (iterative preorder traversal)
     module_queue = [module_tree]
+    mined_properties = set()  # type: Set[Property]
     while len(module_queue) > 0:
         module = module_queue.pop()
-        mine(module, vcd_data_cleaned)
+        mined_properties.update(mine(module, vcd_data_cleaned))
         module_queue.extend(module.children)
+
+    for property in mined_properties:
+        if property.stats.falsified is False and property.stats.support > 100:
+            print(property)

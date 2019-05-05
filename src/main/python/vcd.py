@@ -1,6 +1,6 @@
 import os.path
 import logging
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, FrozenSet
 from collections import defaultdict
 from dataclasses import dataclass
 
@@ -37,6 +37,9 @@ class Module:
         return self.str_helper(1)
 
 
+VCDData = Dict[FrozenSet[Signal], List[Event]]
+
+
 # There is a bug in the original version of read_vcd where if the clock symbol appears before the signal of interest
 # clock_value = 1 will be updated too late, and the signal toggle won't be caught (for signals driven on
 # negative edges from chisel-iotesters drivers (and maybe others). This may be an issue with internal signals too,
@@ -46,7 +49,7 @@ class Module:
 # There's another bug with signal_filter where a signal may have many aliases where a few have junk names (_T)
 # and one has a real name (wr_en). If we cut out the symbol too early when seeing an aliased name, we may not
 # record a signal which should have been recorded. Solution: strip signals after the VCD data is constructed.
-def read_vcd(vcd_filename: str) -> Tuple[Module, Dict[Tuple[Signal], List[Event]]]:
+def read_vcd(vcd_filename: str) -> Tuple[Module, VCDData]:
     logging.info("VCD file: %s", vcd_filename)
     assert os.path.isfile(vcd_filename), "%s not found" % vcd_filename
 
@@ -107,4 +110,4 @@ def read_vcd(vcd_filename: str) -> Tuple[Module, Dict[Tuple[Signal], List[Event]
     assert len(module_tree) == 1
     final_module_tree = module_tree[0]
     print("Module hierarchy: \n{}".format(final_module_tree))
-    return final_module_tree, {tuple(data[0]): data[1] for (symbol, data) in vcd_data.items()}
+    return final_module_tree, {frozenset(data[0]): data[1] for (symbol, data) in vcd_data.items()}
