@@ -2,6 +2,7 @@ from vcd import Event, Module, Signal
 from typing import List, FrozenSet, Dict, Tuple, Iterator, Optional, Set, Callable
 import itertools
 from dataclasses import dataclass
+from enum import Enum, auto
 
 
 @dataclass(frozen=True)
@@ -11,11 +12,24 @@ class PropertyStats:
     falsified: bool
 
 
+class PropertyType(Enum):
+    ALTERNATING = auto()
+    NEXT = auto()
+    UNTIL = auto()
+    EVENTUAL = auto()
+
+
 @dataclass(frozen=True)
 class Property:
     a: FrozenSet[Signal]
     b: FrozenSet[Signal]
+    # TODO: these classes should be split
     stats: PropertyStats
+
+    def __eq__(self, other) -> bool:
+        return self.__class__.__name__ == other.__class__.__name__ and \
+               self.a == other.a and \
+               self.b == other.b
 
 
 @dataclass(frozen=True)
@@ -198,6 +212,7 @@ def mine_evenutual(a: List[Event], b: List[Event]) -> PropertyStats:
         else:
             assert False, "should not get here"
     # This property can never be falsified, so the support is the primary indicator of usefulness
+    # TODO: using falsifiable as hack to strip away eventual properties with no support
     return PropertyStats(support=support, falsifiable=support > 0, falsified=False)
 
 
