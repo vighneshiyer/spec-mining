@@ -181,6 +181,35 @@ def mine_evenutual(a: List[Event], b: List[Event]) -> PropertyStats:
     return PropertyStats(support=support, falsifiable=falsifiable, falsified=False)
 
 
+def mine_until(a: List[Event], b: List[Event]) -> PropertyStats:
+    automaton_state = 0
+    falsifiable, support = False, 0
+    for t in zip_delta_traces(a, b):
+        if t[0] is not None and t[1] is not None:
+            if automaton_state == 0:
+                automaton_state = 1
+                falsifiable = True
+            elif automaton_state == 1:
+                automaton_state = 1
+                support = support + 1
+        elif t[0] is not None and t[1] is None:
+            if automaton_state == 0:
+                automaton_state = 1
+                falsifiable = True
+            # In state == 1, we have already seen delta a and if we see another delta a, then a didn't remain stable until b toggled
+            elif automaton_state == 1:
+                return PropertyStats(support=support, falsifiable=falsifiable, falsified=True)
+        elif t[0] is None and t[1] is not None:
+            if automaton_state == 0:
+                automaton_state = 0
+            elif automaton_state == 1:
+                automaton_state = 0
+                support = support + 1
+        else:
+            assert False, "should not get here"
+    return PropertyStats(support=support, falsifiable=falsifiable, falsified=False)
+
+
 def mine(module: Module, vcd_data: Dict[FrozenSet[Signal], List[Event]]):
     # Strip vcd_data so it only contains signals that are directly inside this module
     # and only mine permutations of signals directly inside a given module instance
@@ -195,15 +224,18 @@ def mine(module: Module, vcd_data: Dict[FrozenSet[Signal], List[Event]]):
     print("MODULE = {}".format(module.name))
     for combo in itertools.permutations(vcd_data_scoped.keys(), 2):
         combo_str = [[s.name for s in signal_set] for signal_set in combo]
-        alternating_valid = mine_alternating(vcd_data_scoped[combo[0]], vcd_data_scoped[combo[1]])
-        if alternating_valid.falsifiable and not alternating_valid.falsified:
-            print("Alternating: {}, support {}".format(combo_str, alternating_valid.support))
-        next_valid = mine_next(vcd_data_scoped[combo[0]], vcd_data_scoped[combo[1]], 2)
-        if next_valid.falsifiable and not next_valid.falsified:
-            print("Next: {}, support {}".format(combo_str, next_valid.support))
+        alternating = mine_alternating(vcd_data_scoped[combo[0]], vcd_data_scoped[combo[1]])
+        if alternating.falsifiable and not alternating.falsified:
+            print("Alternating: {}, support {}".format(combo_str, alternating.support))
+        next = mine_next(vcd_data_scoped[combo[0]], vcd_data_scoped[combo[1]], 2)
+        if next.falsifiable and not next.falsified:
+            print("Next: {}, support {}".format(combo_str, next.support))
         eventual = mine_evenutual(vcd_data_scoped[combo[0]], vcd_data_scoped[combo[1]])
         if eventual.falsifiable and eventual.support > 0:
             print("Eventual: {}, support {}".format(combo_str, eventual.support))
+        until = mine_until(vcd_data_scoped[combo[0]], vcd_data_scoped[combo[1]])
+        if until.falsifiable and not until.falsified:
+            print("Until: {}, support {}".format(combo_str, until.support))
 
 
 if __name__ == "__main__":
@@ -259,3 +291,19 @@ if __name__ == "__main__":
     )
     assert me2.falsifiable is True
     assert me2.support == 2
+
+    print("TESTING: mine_until")
+    mu1 = mine_until(
+        [Event(2, 1), Event(20, 0)],
+        [Event(6, 0), Event(22, 1)]
+    )
+    assert mu1.falsifiable is True
+    assert mu1.falsified is False
+    assert mu1.support == 2
+
+    mu2 = mine_until(
+        [Event(2, 1), Event(6, 0), Event(20, 1)],
+        [Event(0, 1), Event(8, 0)]
+    )
+    assert mu2.falsifiable is True
+    assert mu2.falsified is True
