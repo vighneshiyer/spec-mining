@@ -1,22 +1,20 @@
 import os.path
 import logging
-from typing import List, Dict, Set, Tuple, FrozenSet
+from typing import List, Dict, Tuple
 from collections import defaultdict
+from dataclasses import dataclass
 
 
+@dataclass(frozen=True)
 class Event:
-    def __init__(self, time: int, value: int) -> None:
-        self.time = time
-        self.value = value
+    time: int
+    value: int
 
 
+@dataclass(frozen=True)
 class Signal:
-    def __init__(self, name: str, width: int) -> None:
-        self.name = name
-        self.width = width
-
-    def __repr__(self) -> str:
-        return "Signal({},{})".format(self.name, self.width)
+    name: str
+    width: int
 
 
 class Module:
@@ -48,14 +46,14 @@ class Module:
 # There's another bug with signal_filter where a signal may have many aliases where a few have junk names (_T)
 # and one has a real name (wr_en). If we cut out the symbol too early when seeing an aliased name, we may not
 # record a signal which should have been recorded. Solution: strip signals after the VCD data is constructed.
-def read_vcd(vcd_filename: str) -> Tuple[Module, Dict[FrozenSet[Signal], List[Event]]]:
+def read_vcd(vcd_filename: str) -> Tuple[Module, Dict[Tuple[Signal], List[Event]]]:
     logging.info("VCD file: %s", vcd_filename)
     assert os.path.isfile(vcd_filename), "%s not found" % vcd_filename
 
     time = -1               # type: int
     # Maps a symbol to a set of aliased signals and the signal's delta event trace.
-    # The Set[Signal] contains all the signals in the VCD that were aliased to one logical signal.
-    vcd_data = defaultdict(lambda: (set(), []))  # type: Dict[str, Tuple[Set[Signal], List[Event]]]
+    # The List[Signal] contains all the signals in the VCD that were aliased to one logical signal.
+    vcd_data = defaultdict(lambda: ([], []))  # type: Dict[str, Tuple[List[Signal], List[Event]]]
 
     with open(vcd_filename, "r") as _f:
         path = list()       # type: List[str]
@@ -88,7 +86,7 @@ def read_vcd(vcd_filename: str) -> Tuple[Module, Dict[FrozenSet[Signal], List[Ev
                     symbol = tokens[3]
                     signal_name = tokens[4]
                     signal = ("%s.%s" % (".".join(path), signal_name))
-                    vcd_data[symbol][0].add(Signal(signal, width))
+                    vcd_data[symbol][0].append(Signal(signal, width))
                 # no more variable definitions
                 elif tokens[0] == "$enddefinitions":
                     assert tokens[1] == "$end"
@@ -109,4 +107,4 @@ def read_vcd(vcd_filename: str) -> Tuple[Module, Dict[FrozenSet[Signal], List[Ev
     assert len(module_tree) == 1
     final_module_tree = module_tree[0]
     print("Module hierarchy: \n{}".format(final_module_tree))
-    return final_module_tree, {frozenset(data[0]): data[1] for (symbol, data) in vcd_data.items()}
+    return final_module_tree, {tuple(data[0]): data[1] for (symbol, data) in vcd_data.items()}

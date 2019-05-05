@@ -1,6 +1,49 @@
 from vcd import Event, Module, Signal
-from typing import List, FrozenSet, Dict
+from typing import List, FrozenSet, Dict, Tuple, Iterator, Optional
 import itertools
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class Property:
+    a: FrozenSet[Signal]
+    b: FrozenSet[Signal]
+
+
+@dataclass(frozen=True)
+class Alternating(Property):
+    pass
+
+
+@dataclass(frozen=True)
+class PropertyStats:
+    support: int
+    falsifiable: bool
+    falsified: bool
+
+
+# Combine a and b delta traces into 1 delta trace which consists of tuples indicating
+# whether a, b, or both occurred at a timestep
+def zip_delta_traces(a: List[Event], b: List[Event]) -> Iterator[Tuple[Optional[Event], Optional[Event]]]:
+    a_idx, b_idx = 0, 0
+    while a_idx < len(a) or b_idx < len(b):
+        # received an 'a' and 'b' on the same cycle
+        if a_idx < len(a) and b_idx < len(b) and a[a_idx].time == b[b_idx].time:
+            yield (a[a_idx], b[b_idx])
+            a_idx = a_idx + 1
+            b_idx = b_idx + 1
+        # received a 'a' event
+        elif (a_idx < len(a) and b_idx < len(b) and a[a_idx].time < b[b_idx].time) \
+                or (b_idx == len(b) and a_idx < len(a)):
+            yield (a[a_idx], None)
+            a_idx = a_idx + 1
+        # received a 'b' event
+        elif a_idx < len(a) and b_idx < len(b) and a[a_idx].time > b[b_idx].time \
+                or (a_idx == len(a) and b_idx < len(b)):
+            yield (None, b[b_idx])
+            b_idx = b_idx + 1
+        else:
+            assert False, "should not get here"
 
 
 def sample_signal(clock: List[Event], signal: List[Event]) -> List[Event]:
@@ -43,76 +86,63 @@ def sample_signal(clock: List[Event], signal: List[Event]) -> List[Event]:
 
 
 # This pattern is only really legitimate when used with boolean control signals
-def mine_alternating(a: List[Event], b: List[Event]) -> bool:
+def mine_alternating(a: List[Event], b: List[Event]) -> PropertyStats:
     # If a == b, they have identical events, and although are strictly alternating, that
     # strict definition is useless for verification since a and b are identically sourced
-    # TODO: check whether this is reasonable
     if a == b:
-        return False
+        return PropertyStats(support=0, falsifiable=True, falsified=True)
     automaton_state = 0
-    a_idx, b_idx = 0, 0
-    while a_idx < len(a) or b_idx < len(b):
-        # received an 'a' and 'b' on the same cycle (don't advance the automaton)
-        if a_idx < len(a) and b_idx < len(b) and a[a_idx].time == b[b_idx].time:
-            a_idx = a_idx + 1
-            b_idx = b_idx + 1
-        # received an 'a' event
-        elif (a_idx < len(a) and b_idx < len(b) and a[a_idx].time < b[b_idx].time) \
-                or (b_idx == len(b) and a_idx < len(a)):
+    falsifiable, support = False, 0
+    for t in zip_delta_traces(a, b):
+        # got a and b, no matter what state we are in, we move to the error state
+        if t[0] is not None and t[1] is not None:
+            return PropertyStats(support=support, falsifiable=True, falsified=True)
+        elif t[0] is not None and t[1] is None:  # got a, but not b
             if automaton_state == 0:
                 automaton_state = 1
-                a_idx = a_idx + 1
-            else:
-                return False
-        # received an 'b' event
-        elif a_idx < len(a) and b_idx < len(b) and a[a_idx].time > b[b_idx].time \
-                or (a_idx == len(a) and b_idx < len(b)):
+                falsifiable = True
+            elif automaton_state == 1:  # we already got an a before, so this pattern fails
+                return PropertyStats(support=support, falsifiable=falsifiable, falsified=True)
+        elif t[0] is None and t[1] is not None:  # got b, but not a
             if automaton_state == 1:
                 automaton_state = 0
-                b_idx = b_idx + 1
-            else:
-                return False
+                support = support + 1  # a successful completion of the pattern
+            elif automaton_state == 0:  # we haven't got an 'a' yet, so b shouldn't go first
+                return PropertyStats(support=support, falsifiable=falsifiable, falsified=True)
         else:
-            print(a_idx, b_idx, automaton_state)
             assert False, "should not get here"
-    return automaton_state == 0
+    return PropertyStats(support=support, falsifiable=falsifiable, falsified=False)
 
 
-def mine_next(a: List[Event], b: List[Event], clk_period: int) -> bool:
+def mine_next(a: List[Event], b: List[Event], clk_period: int) -> PropertyStats:
     automaton_state = 0
-    patterns_seen = 0
+    falsifiable, support = False, 0
     a_event_time = 0
-    a_idx, b_idx = 0, 0
-    while a_idx < len(a) or b_idx < len(b):
-        # received an 'a' and 'b' on the same cycle
-        if a_idx < len(a) and b_idx < len(b) and a[a_idx].time == b[b_idx].time:
-            a_event_time = a[a_idx].time
-            a_idx = a_idx + 1
-            b_idx = b_idx + 1
-            if automaton_state == 0: automaton_state = 1
-        # received an 'a' event and NOT an 'b' event
-        elif (a_idx < len(a) and b_idx < len(b) and a[a_idx].time < b[b_idx].time) \
-                or (b_idx == len(b) and a_idx < len(a)):
-            if automaton_state == 0: automaton_state = 1
-            elif automaton_state == 1: return False  # didn't get a 'b' NEXT 'a'
-            a_event_time = a[a_idx].time
-            a_idx = a_idx + 1
-        # received an 'b' event and NOT an 'a' event
-        elif a_idx < len(a) and b_idx < len(b) and a[a_idx].time > b[b_idx].time \
-                or (a_idx == len(a) and b_idx < len(b)):
-            if automaton_state == 1 and b[b_idx].time == a_event_time + clk_period:
+    for t in zip_delta_traces(a, b):
+        if t[0] is not None and t[1] is not None:  # got a and b
+            a_event_time = t[0].time
+            if automaton_state == 0:
+                automaton_state = 1
+                falsifiable = True
+            elif automaton_state == 1:
+                automaton_state = 1
+                support = support + 1
+        elif t[0] is not None and t[1] is None:  # got a, but not b
+            a_event_time = t[0].time
+            if automaton_state == 0:
+                automaton_state = 1
+                falsifiable = True
+            elif automaton_state == 1:
+                return PropertyStats(support=support, falsifiable=falsifiable, falsified=True)
+        elif t[0] is None and t[1] is not None:  # got b, but not a
+            if automaton_state == 1 and t[1].time == a_event_time + clk_period:
                 automaton_state = 0
-                b_idx = b_idx + 1
-                patterns_seen = patterns_seen + 1
-            elif automaton_state == 0:
-                automaton_state = 0
-                b_idx = b_idx + 1
-            else:
-                return False  # didn't get a 'b' NEXT 'a', but rather more than 1 clock
+                support = support + 1
+            elif automaton_state == 1 and t[1].time != a_event_time + clk_period:
+                return PropertyStats(support=support, falsifiable=falsifiable, falsified=True)
         else:
-            print(a_idx, b_idx, automaton_state)
             assert False, "should not get here"
-    return (automaton_state == 0 or automaton_state == 1) and patterns_seen > 0
+    return PropertyStats(support=support, falsifiable=falsifiable, falsified=False)
 
 
 def mine(module: Module, vcd_data: Dict[FrozenSet[Signal], List[Event]]):
@@ -130,11 +160,11 @@ def mine(module: Module, vcd_data: Dict[FrozenSet[Signal], List[Event]]):
     for combo in itertools.permutations(vcd_data_scoped.keys(), 2):
         combo_str = [[s.name for s in signal_set] for signal_set in combo]
         alternating_valid = mine_alternating(vcd_data_scoped[combo[0]], vcd_data_scoped[combo[1]])
-        if alternating_valid:
-            print("Alternating: {}".format(combo_str))
+        if alternating_valid.falsifiable and not alternating_valid.falsified:
+            print("Alternating: {}, support {}".format(combo_str, alternating_valid.support))
         next_valid = mine_next(vcd_data_scoped[combo[0]], vcd_data_scoped[combo[1]], 2)
-        if next_valid:
-            print("Next: {}".format(combo_str))
+        if next_valid.falsifiable and not next_valid.falsified:
+            print("Next: {}, support {}".format(combo_str, next_valid.support))
 
 
 if __name__ == "__main__":
@@ -152,19 +182,26 @@ if __name__ == "__main__":
     assert sampled_data == [Event(1, 100), Event(3, 200), Event(5, 300)]
 
     print("TESTING: mine_alternating")
-    assert(mine_alternating(
+    ma1 = mine_alternating(
         [Event(0, 1), Event(5, 0), Event(10, 1)],
         [Event(1, 0), Event(6, 1), Event(11, 0)]
-    ))
+    )
+    assert ma1.falsifiable is True
+    assert ma1.falsified is False
 
     print("TESTING: mine_next")
-    assert(mine_next(
+    mn1 = mine_next(
         [Event(2, 1), Event(6, 0)],
         [Event(4, 0), Event(8, 1)],
         2
-    ))
-    assert(not mine_next(
+    )
+    assert mn1.falsifiable is True
+    assert mn1.falsified is False
+
+    mn2 = mine_next(
         [Event(2, 1), Event(6, 0)],
         [Event(8, 0)],
         2
-    ))
+    )
+    assert mn2.falsifiable is True
+    assert mn2.falsified is True

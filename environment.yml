@@ -10,4 +10,4 @@ dependencies:
 - matplotlib
 - dataclasses
 - jupyter
-- mypy
+- mypy=0.701

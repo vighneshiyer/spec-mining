@@ -54,8 +54,8 @@ if __name__ == "__main__":
         del vcd_data_sampled[key_to_delete]
 
     for (key_to_trim, set_of_junk_signals) in keys_to_trim.items():
-        new_set = key_to_trim - set_of_junk_signals
-        vcd_data_sampled[new_set] = vcd_data_sampled.pop(key_to_trim)
+        new_set = set(key_to_trim) - set_of_junk_signals
+        vcd_data_sampled[tuple(new_set)] = vcd_data_sampled.pop(key_to_trim)
 
     # Trim off signals that have no delta events or are too wide
     vcd_data_cleaned = {signal_set: trace for (signal_set, trace) in vcd_data_sampled.items()
