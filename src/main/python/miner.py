@@ -54,6 +54,7 @@ if __name__ == "__main__":
         del vcd_data_sampled[key_to_delete]
 
     for (key_to_trim, set_of_junk_signals) in keys_to_trim.items():
+        # TODO: hack hack hack, stick with set or tuple, don't mess with both combined
         new_set = set(key_to_trim) - set_of_junk_signals
         vcd_data_sampled[tuple(new_set)] = vcd_data_sampled.pop(key_to_trim)
 

@@ -145,6 +145,42 @@ def mine_next(a: List[Event], b: List[Event], clk_period: int) -> PropertyStats:
     return PropertyStats(support=support, falsifiable=falsifiable, falsified=False)
 
 
+def mine_evenutual(a: List[Event], b: List[Event]) -> PropertyStats:
+    automaton_state = 0
+    falsifiable, support = False, 0
+    for t in zip_delta_traces(a, b):
+        if t[0] is not None and t[1] is not None:  # got a and b
+            if automaton_state == 0:
+                automaton_state = 1
+                falsifiable = True
+            elif automaton_state == 1:
+                support = support + 1  # TODO: is this the right idea?
+                automaton_state = 2
+            elif automaton_state == 2:
+                automaton_state = 2
+        elif t[0] is not None and t[1] is None:  # got a, but not b
+            if automaton_state == 0:
+                automaton_state = 1
+                falsifiable = True
+            elif automaton_state == 1:
+                automaton_state = 1
+            elif automaton_state == 2:
+                automaton_state = 1
+        elif t[0] is None and t[1] is not None:  # got b, but not a
+            if automaton_state == 0:
+                automaton_state = 0
+            elif automaton_state == 1:
+                automaton_state = 0
+                support = support + 1
+            elif automaton_state == 2:
+                automaton_state = 0
+                support = support + 1
+        else:
+            assert False, "should not get here"
+    # This property can never be falsified, so the support is the primary indicator of usefulness
+    return PropertyStats(support=support, falsifiable=falsifiable, falsified=False)
+
+
 def mine(module: Module, vcd_data: Dict[FrozenSet[Signal], List[Event]]):
     # Strip vcd_data so it only contains signals that are directly inside this module
     # and only mine permutations of signals directly inside a given module instance
@@ -165,6 +201,9 @@ def mine(module: Module, vcd_data: Dict[FrozenSet[Signal], List[Event]]):
         next_valid = mine_next(vcd_data_scoped[combo[0]], vcd_data_scoped[combo[1]], 2)
         if next_valid.falsifiable and not next_valid.falsified:
             print("Next: {}, support {}".format(combo_str, next_valid.support))
+        eventual = mine_evenutual(vcd_data_scoped[combo[0]], vcd_data_scoped[combo[1]])
+        if eventual.falsifiable and eventual.support > 0:
+            print("Eventual: {}, support {}".format(combo_str, eventual.support))
 
 
 if __name__ == "__main__":
@@ -205,3 +244,18 @@ if __name__ == "__main__":
     )
     assert mn2.falsifiable is True
     assert mn2.falsified is True
+
+    print("TESTING: mine_eventual")
+    me1 = mine_evenutual(
+        [Event(2, 1), Event(20, 0)],
+        [Event(2, 1)]
+    )
+    assert me1.support == 0
+    assert me1.falsifiable is True
+
+    me2 = mine_evenutual(
+        [Event(2, 1), Event(20, 0)],
+        [Event(4, 1), Event(6, 0), Event(30, 1)]
+    )
+    assert me2.falsifiable is True
+    assert me2.support == 2
