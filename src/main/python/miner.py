@@ -2,6 +2,7 @@ from vcd import read_vcd, Signal
 from analysis import sample_signal, mine, Property
 import pprint
 import argparse
+import pickle
 from typing import List, FrozenSet, Dict, Set
 
 
@@ -9,6 +10,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--start-time', type=int, default=0)
     parser.add_argument('--signal-bit-limit', type=int, default=5)
+    parser.add_argument('--dump-file', type=str)
     parser.add_argument('vcd_file', type=str, nargs=1)
     args = parser.parse_args()
     print("Miner called with arguments: {}".format(args))
@@ -54,7 +56,6 @@ if __name__ == "__main__":
         del vcd_data_sampled[key_to_delete]
 
     for (key_to_trim, set_of_junk_signals) in keys_to_trim.items():
-        # TODO: hack hack hack, stick with set or tuple, don't mess with both combined
         new_set = key_to_trim - set_of_junk_signals
         vcd_data_sampled[new_set] = vcd_data_sampled.pop(key_to_trim)
 
@@ -74,6 +75,12 @@ if __name__ == "__main__":
         mined_properties.update(mine(module, vcd_data_cleaned))
         module_queue.extend(module.children)
 
+    mined_properties = set(filter(lambda prop: prop.stats.support > 0, mined_properties))
+
     for property in mined_properties:
         if property.stats.falsified is False and property.stats.support > 100:
             print(property)
+
+    if args.dump_file is not None:
+        with open(args.dump_file, "wb") as f:
+            pickle.dump(mined_properties, f)
