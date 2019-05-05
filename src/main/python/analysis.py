@@ -1,8 +1,7 @@
-from vcd import Event, Module, Signal
+from vcd import Event, Module, Signal, VCDData, DeltaTrace
 from typing import List, FrozenSet, Dict, Tuple, Iterator, Optional, Set, Callable
 import itertools
 from dataclasses import dataclass
-from enum import Enum, auto
 
 
 @dataclass(frozen=True)
@@ -12,19 +11,15 @@ class PropertyStats:
     falsified: bool
 
 
-class PropertyType(Enum):
-    ALTERNATING = auto()
-    NEXT = auto()
-    UNTIL = auto()
-    EVENTUAL = auto()
-
-
 @dataclass(frozen=True)
 class Property:
     a: FrozenSet[Signal]
     b: FrozenSet[Signal]
     # TODO: these classes should be split
     stats: PropertyStats
+
+    def mine(self, a: DeltaTrace, b: DeltaTrace) -> PropertyStats:
+        pass
 
     def __eq__(self, other) -> bool:
         return self.__class__.__name__ == other.__class__.__name__ and \
@@ -34,24 +29,28 @@ class Property:
 
 @dataclass(frozen=True)
 class Alternating(Property):
+    def mine(self, a: DeltaTrace, b: DeltaTrace) -> PropertyStats: return mine_alternating(a, b)
     def __repr__(self) -> str:
         return "Alternating {} -> {}, support = {}".format(self.a, self.b, self.stats.support)
 
 
 @dataclass(frozen=True)
 class Next(Property):
+    def mine(self, a: DeltaTrace, b: DeltaTrace) -> PropertyStats: return mine_next(a, b)
     def __repr__(self) -> str:
         return "Next {} -> {}, support = {}".format(self.a, self.b, self.stats.support)
 
 
 @dataclass(frozen=True)
 class Until(Property):
+    def mine(self, a: DeltaTrace, b: DeltaTrace) -> PropertyStats: return mine_until(a, b)
     def __repr__(self) -> str:
         return "Until {} -> {}, support = {}".format(self.a, self.b, self.stats.support)
 
 
 @dataclass(frozen=True)
 class Eventual(Property):
+    def mine(self, a: DeltaTrace, b: DeltaTrace) -> PropertyStats: return mine_evenutual(a, b)
     def __repr__(self) -> str:
         return "Eventual {} -> {}, support = {}".format(self.a, self.b, self.stats.support)
 
