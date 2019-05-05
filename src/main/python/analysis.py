@@ -80,45 +80,6 @@ def zip_delta_traces(a: List[Event], b: List[Event]) -> Iterator[Tuple[Optional[
             assert False, "should not get here"
 
 
-def sample_signal(clock: List[Event], signal: List[Event]) -> List[Event]:
-    """
-    Samples a signal at the posedge of the clock. The rising edge of the clock will be internally
-    brought back by a nudge to sample signals that change on the clock edge.
-    """
-    posedges = list(filter(lambda e: e.value == 1, clock))
-    sig_value = signal[0].value
-    assert signal[0].time == 0, "The signal to be sampled requires an initial value"
-    clk_idx, sig_idx = 0, 0
-    sampled_signal = []  # type: List[Event]
-
-    def add_event(time: int, value: int):
-        if len(sampled_signal) > 0 and sampled_signal[-1].value != value:
-            sampled_signal.append(Event(time, value))
-        elif len(sampled_signal) == 0:
-            sampled_signal.append(Event(time, value))
-
-    while sig_idx < len(signal) or clk_idx < len(posedges):
-        # signal and clock coincide, so log the signal before the clock edge
-        if sig_idx < len(signal) and clk_idx < len(posedges) and signal[sig_idx].time == posedges[clk_idx].time:
-            add_event(signal[sig_idx].time, sig_value)
-            sig_value = signal[sig_idx].value
-            sig_idx = sig_idx + 1
-            clk_idx = clk_idx + 1
-        # signal toggled 'before' a rising edge, just update the current signal value
-        elif (sig_idx < len(signal) and clk_idx < len(posedges) and signal[sig_idx].time < posedges[clk_idx].time) \
-                or (clk_idx == len(posedges) and sig_idx < len(signal)):
-            sig_value = signal[sig_idx].value
-            sig_idx = sig_idx + 1
-        # clock posedge has arrived before the next signal transition, so log an event now
-        elif (sig_idx < len(signal) and clk_idx < len(posedges) and signal[sig_idx].time > posedges[clk_idx].time) \
-                or (sig_idx == len(signal) and clk_idx < len(posedges)):
-            add_event(posedges[clk_idx].time, sig_value)
-            clk_idx = clk_idx + 1
-        else:
-            assert False
-    return sampled_signal
-
-
 # This pattern is only really legitimate when used with boolean control signals
 def mine_alternating(a: List[Event], b: List[Event]) -> PropertyStats:
     # If a == b, they have identical events, and although are strictly alternating, that
@@ -270,19 +231,6 @@ def mine(module: Module, vcd_data: Dict[FrozenSet[Signal], List[Event]]) -> Set[
 
 
 if __name__ == "__main__":
-    print("TESTING: sample_signal")
-    # Case 1: data changes at same timestep as clock
-    clock = [Event(0, 0), Event(1, 1), Event(2, 0), Event(3, 1), Event(4, 0), Event(5, 1)]
-    data = [Event(0, 100), Event(1, 200), Event(5, 300)]
-    sampled_data = sample_signal(clock, data)
-    assert sampled_data == [Event(1, 100), Event(3, 200)]
-
-    # Case 2: data changes at negedge of clock
-    clock = [Event(0, 0), Event(1, 1), Event(2, 0), Event(3, 1), Event(4, 0), Event(5, 1)]
-    data = [Event(0, 100), Event(2, 200), Event(4, 300)]
-    sampled_data = sample_signal(clock, data)
-    assert sampled_data == [Event(1, 100), Event(3, 200), Event(5, 300)]
-
     print("TESTING: mine_alternating")
     ma1 = mine_alternating(
         [Event(0, 1), Event(5, 0), Event(10, 1)],
