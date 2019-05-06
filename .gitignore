@@ -349,3 +349,14 @@ hs_err_pid*
 *.blg
 *.run.xml
 __pycache__
+
+*_minted
+*.aux
+*.bcf
+*.log
+*.nav
+*.out
+*.run.xml
+*.snm
+*.toc
+*.vrb
