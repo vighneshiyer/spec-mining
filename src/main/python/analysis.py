@@ -9,6 +9,7 @@ class PropertyStats:
     support: int
     falsifiable: bool
     falsified: bool
+    falsified_time: int
 
 
 @dataclass(frozen=True)
@@ -81,28 +82,28 @@ def mine_alternating(a: DeltaTrace, b: DeltaTrace) -> PropertyStats:
     # If a == b, they have identical events, and although are strictly alternating, that
     # strict definition is useless for verification since a and b are identically sourced
     if a == b:
-        return PropertyStats(support=0, falsifiable=True, falsified=True)
+        return PropertyStats(support=0, falsifiable=True, falsified=True, falsified_time=0)
     automaton_state = 0
     falsifiable, support = False, 0
     for t in zip_delta_traces(a, b):
         # got a and b, no matter what state we are in, we move to the error state
         if t[0] is not None and t[1] is not None:
-            return PropertyStats(support=support, falsifiable=True, falsified=True)
+            return PropertyStats(support=support, falsifiable=True, falsified=True, falsified_time=t[0].time)
         elif t[0] is not None and t[1] is None:  # got a, but not b
             if automaton_state == 0:
                 automaton_state = 1
                 falsifiable = True
             elif automaton_state == 1:  # we already got an a before, so this pattern fails
-                return PropertyStats(support=support, falsifiable=falsifiable, falsified=True)
+                return PropertyStats(support=support, falsifiable=falsifiable, falsified=True, falsified_time=t[0].time)
         elif t[0] is None and t[1] is not None:  # got b, but not a
             if automaton_state == 1:
                 automaton_state = 0
                 support = support + 1  # a successful completion of the pattern
             elif automaton_state == 0:  # we haven't got an 'a' yet, so b shouldn't go first
-                return PropertyStats(support=support, falsifiable=falsifiable, falsified=True)
+                return PropertyStats(support=support, falsifiable=falsifiable, falsified=True, falsified_time=t[1].time)
         else:
             assert False, "should not get here"
-    return PropertyStats(support=support, falsifiable=falsifiable, falsified=False)
+    return PropertyStats(support=support, falsifiable=falsifiable, falsified=False, falsified_time=0)
 
 
 def mine_next(a: DeltaTrace, b: DeltaTrace, clk_period: int = 2) -> PropertyStats:
@@ -124,16 +125,16 @@ def mine_next(a: DeltaTrace, b: DeltaTrace, clk_period: int = 2) -> PropertyStat
                 automaton_state = 1
                 falsifiable = True
             elif automaton_state == 1:
-                return PropertyStats(support=support, falsifiable=falsifiable, falsified=True)
+                return PropertyStats(support=support, falsifiable=falsifiable, falsified=True, falsified_time=t[0].time)
         elif t[0] is None and t[1] is not None:  # got b, but not a
             if automaton_state == 1 and t[1].time == a_event_time + clk_period:
                 automaton_state = 0
                 support = support + 1
             elif automaton_state == 1 and t[1].time != a_event_time + clk_period:
-                return PropertyStats(support=support, falsifiable=falsifiable, falsified=True)
+                return PropertyStats(support=support, falsifiable=falsifiable, falsified=True, falsified_time=t[1].time)
         else:
             assert False, "should not get here"
-    return PropertyStats(support=support, falsifiable=falsifiable, falsified=False)
+    return PropertyStats(support=support, falsifiable=falsifiable, falsified=False, falsified_time=0)
 
 
 def mine_evenutual(a: DeltaTrace, b: DeltaTrace) -> PropertyStats:
@@ -169,7 +170,7 @@ def mine_evenutual(a: DeltaTrace, b: DeltaTrace) -> PropertyStats:
         else:
             assert False, "should not get here"
     # This property can never be falsified, so the support is the primary indicator of usefulness
-    return PropertyStats(support=support, falsifiable=falsifiable, falsified=False)
+    return PropertyStats(support=support, falsifiable=falsifiable, falsified=False, falsified_time=0)
 
 
 def mine_until(a: DeltaTrace, b: DeltaTrace) -> PropertyStats:
@@ -190,7 +191,7 @@ def mine_until(a: DeltaTrace, b: DeltaTrace) -> PropertyStats:
             # In state == 1, we have already seen delta a and if we see another delta a without also a delta b,
             # then a didn't remain stable until b toggled
             elif automaton_state == 1:
-                return PropertyStats(support=support, falsifiable=falsifiable, falsified=True)
+                return PropertyStats(support=support, falsifiable=falsifiable, falsified=True, falsified_time=t[0].time)
         elif t[0] is None and t[1] is not None:
             if automaton_state == 0:
                 automaton_state = 0
@@ -199,7 +200,7 @@ def mine_until(a: DeltaTrace, b: DeltaTrace) -> PropertyStats:
                 support = support + 1
         else:
             assert False, "should not get here"
-    return PropertyStats(support=support, falsifiable=falsifiable, falsified=False)
+    return PropertyStats(support=support, falsifiable=falsifiable, falsified=False, falsified_time=0)
 
 
 def mine_module(module: Module, vcd_data: VCDData) -> MinerResult:

@@ -1,5 +1,6 @@
 import sys
-from analysis import Property, MinerResult
+from typing import Tuple
+from analysis import Property, MinerResult, Eventual
 from vcd import VCDData, read_vcd_clean
 import argparse
 import pickle
@@ -7,12 +8,19 @@ import pickle
 
 # Check whether property p isn't violated after traces a and b have been extracted from it
 # True if no violation, False if falsified
-def check(p: Property, vcd_data: VCDData) -> bool:
+def check(p: Property, vcd_data: VCDData) -> Tuple[bool, int]:
     if p.a in vcd_data.keys() and p.b in vcd_data.keys():
-        stats = p.mine(vcd_data[p.a], vcd_data[p.b])
-        return not stats.falsified
+        # Special case eventual since it can't be falsified but can lack support
+        # TODO: figure out how to properly merge eventual properties
+        if p.__class__ == Eventual:
+            return True, 0
+            #stats = p.mine(vcd_data[p.a], vcd_data[p.b])
+            #return stats.support > 0, stats.falsified_time
+        else:
+            stats = p.mine(vcd_data[p.a], vcd_data[p.b])
+            return not stats.falsified, stats.falsified_time
     else:
-        return True
+        return True, 0
 
 
 if __name__ == "__main__":
@@ -29,8 +37,10 @@ if __name__ == "__main__":
     with open(args.prop_file[0], 'rb') as prop_f:
         props = pickle.load(prop_f)  # type: MinerResult
         for (prop, stats) in props.items():
-            if stats.falsified is False and not check(prop, vcd_data):
-                print("ERROR on property {}".format(prop))
-                good = False
+            if stats.falsified is False:
+                not_violated, falsified_time = check(prop, vcd_data)
+                if not not_violated:
+                    print("ERROR on property {} with support {} at time {}".format(prop, stats.support, falsified_time))
+                    good = False
     if not good:
         sys.exit(1)

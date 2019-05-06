@@ -12,16 +12,15 @@ import pickle
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--dump-file', type=str)
-    parser.add_argument('--riscv-mini-root', type=str)
+    parser.add_argument('--vcd-root', type=str)
     args = parser.parse_args()
     print("riscv-mini analysis called with arguments: {}".format(args))
 
-    vcd_root = args.riscv_mini_root + "/outputs/"
-    vcd_files = list(filter(lambda f: 'vcd' in f and (('rv32ui-p-' in f) or ('rv32mi-p-' in f)), os.listdir(vcd_root)))
+    vcd_files = list(filter(lambda f: 'vcd' in f and (('rv32ui-p-' in f) or ('rv32mi-p-' in f)), os.listdir(args.vcd_root)))
     start_time = 12
     bit_limit = 4
 
-    vcd_data = [read_vcd_clean(vcd_root + vcd, start_time, bit_limit) for vcd in vcd_files]
+    vcd_data = [read_vcd_clean(args.vcd_root + vcd, start_time, bit_limit) for vcd in vcd_files]
     props = Parallel(n_jobs=4)(delayed(mine_modules_recurse)(module, data) for (module, data) in vcd_data)
 
     print("Merging mined properties")
