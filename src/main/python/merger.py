@@ -14,7 +14,6 @@ def merge_props(props: List[MinerResult]) -> MinerResult:
             else:
                 old_prop_stats = merged_props[new_prop]
                 if new_stats.falsified:
-                    print("FALSIFIED PROPERTY {}".format(new_prop))
                     merged_props[new_prop] = \
                         PropertyStats(support=old_prop_stats.support, falsifiable=True, falsified=True)
                 else:

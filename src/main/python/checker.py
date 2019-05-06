@@ -10,7 +10,6 @@ import pickle
 def check(p: Property, vcd_data: VCDData) -> bool:
     if p.a in vcd_data.keys() and p.b in vcd_data.keys():
         stats = p.mine(vcd_data[p.a], vcd_data[p.b])
-        print(stats)
         return not stats.falsified
     else:
         return True
