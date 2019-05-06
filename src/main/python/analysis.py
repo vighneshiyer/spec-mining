@@ -191,7 +191,7 @@ def mine_until(a: List[Event], b: List[Event]) -> PropertyStats:
             if automaton_state == 0:
                 automaton_state = 1
                 falsifiable = True
-            # In state == 1, we have already seen delta a and if we see another delta a,
+            # In state == 1, we have already seen delta a and if we see another delta a without also a delta b,
             # then a didn't remain stable until b toggled
             elif automaton_state == 1:
                 return PropertyStats(support=support, falsifiable=falsifiable, falsified=True)

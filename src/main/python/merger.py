@@ -15,6 +15,7 @@ def merge_props(props: List[Set[Property]]) -> Dict[Property, PropertyStats]:
             else:
                 old_prop = merged_props[new_prop]
                 if new_prop.stats.falsified:
+                    print("FALSIFIED PROPERTY {}".format(new_prop))
                     merged_props[new_prop] = \
                         PropertyStats(support=old_prop.support, falsifiable=True, falsified=True)
                 else:
@@ -38,6 +39,9 @@ if __name__ == "__main__":
             prop_list.append(pickle.load(f))
 
     aggregate_props = merge_props(prop_list)
-    for (p, s) in aggregate_props.items():
-        if not s.falsified and s.support > 0:
-            print(p)
+    #for (p, s) in aggregate_props.items():
+        #if not s.falsified and s.support > 0:
+            #print(p)
+
+    with open(args.dump_file, 'wb') as f:
+        pickle.dump(aggregate_props, f)

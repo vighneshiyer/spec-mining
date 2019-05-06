@@ -7,10 +7,11 @@ from typing import Set
 
 
 def mine_from_vcd(vcd_file_path: str, start_time: int, signal_bit_limit: int) -> Set[Property]:
+    print("Mining from VCD: {}".format(vcd_file_path))
     module_tree, vcd_data = read_vcd_clean(vcd_file_path, start_time, signal_bit_limit)
-    print("Found events for these signals:")
-    pp = pprint.PrettyPrinter(indent=4)
-    pp.pprint({", ".join(map(lambda s: s.name, signal)): len(data) for (signal, data) in vcd_data.items()})
+    #print("Found events for these signals:")
+    #pp = pprint.PrettyPrinter(indent=4)
+    #pp.pprint({", ".join(map(lambda s: s.name, signal)): len(data) for (signal, data) in vcd_data.items()})
 
     # Walk the module tree with DFS (iterative preorder traversal)
     module_queue = [module_tree]

@@ -1,3 +1,4 @@
+import sys
 from analysis import Property
 from vcd import VCDData, read_vcd_clean
 import argparse
@@ -10,8 +11,12 @@ def check(p: Property, vcd_data: VCDData) -> bool:
     if p.stats.falsified:
         return True
     else:
-        stats = p.mine(vcd_data[p.a], vcd_data[p.b])
-        return not stats.falsified
+        if p.a in vcd_data.keys() and p.b in vcd_data.keys():
+            stats = p.mine(vcd_data[p.a], vcd_data[p.b])
+            print(stats)
+            return not stats.falsified
+        else:
+            return True
 
 
 if __name__ == "__main__":
@@ -24,8 +29,12 @@ if __name__ == "__main__":
     print("Checker called with arguments: {}".format(args))
 
     module_tree, vcd_data = read_vcd_clean(args.vcd_file[0], args.start_time, args.signal_bit_limit)
+    good = True
     with open(args.prop_file[0], 'rb') as prop_f:
         props = pickle.load(prop_f)
         for p in props:
-            print(p)
-            assert check(p, vcd_data)
+            if not check(p, vcd_data):
+                print("ERROR on property {}".format(p))
+                good = False
+    if not good:
+        sys.exit(1)

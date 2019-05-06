@@ -112,7 +112,7 @@ def read_vcd(vcd_filename: str) -> Tuple[Module, VCDData]:
 
     assert len(module_tree) == 1
     final_module_tree = module_tree[0]
-    print("Module hierarchy: \n{}".format(final_module_tree))
+    #print("Module hierarchy: \n{}".format(final_module_tree))
     return final_module_tree, {frozenset(data[0]): data[1] for (symbol, data) in vcd_data.items()}
 
 
@@ -170,7 +170,7 @@ def read_vcd_clean(vcd_file_path: str, start_time: int, signal_bit_limit: int) -
     assert len(clocks) == 1, "Found too many or no clocks. Got: {}".format(clocks)
     assert all([c.width == 1 for c in clocks[0]]), "All clock signals better have a width of 1"
     clock = clocks[0]
-    print("Found clock {}".format(clock))
+    #print("Found clock {}".format(clock))
 
     # Sample signals on the clock
     vcd_data_sampled = {signal: sample_signal(vcd_data[clock], data) for (signal, data) in vcd_data.items()}

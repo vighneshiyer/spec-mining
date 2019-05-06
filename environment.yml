@@ -11,3 +11,4 @@ dependencies:
 - dataclasses
 - jupyter
 - mypy=0.701
+- joblib
