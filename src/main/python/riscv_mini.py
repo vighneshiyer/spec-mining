@@ -17,7 +17,7 @@ if __name__ == "__main__":
     print("riscv-mini analysis called with arguments: {}".format(args))
 
     vcd_root = args.riscv_mini_root + "/outputs/"
-    vcd_files = list(filter(lambda f: 'vcd' in f and 'rv32ui-p-' in f, os.listdir(vcd_root)))
+    vcd_files = list(filter(lambda f: 'vcd' in f and (('rv32ui-p-' in f) or ('rv32mi-p-' in f)), os.listdir(vcd_root)))
     start_time = 12
     bit_limit = 4
 
