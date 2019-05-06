@@ -263,8 +263,27 @@ Next TOP.Tile.core.dpath.brCond.neq -> TOP.Tile.core.dpath.brCond.eq, support: 3
   \end{minted}
 \end{frame}
 
+\begin{frame}[fragile]{Mining on all \texttt{riscv-mini} VCDs}
+  \begin{minted}[breaklines, fontsize=\scriptsize]{text}
+python riscv_mini.py --vcd-root riscv-mini/outputs/ --dump-file riscv_mini.props
+Top 30 properties
+Until TOP.Tile.core.ctrl.io_A_sel -> TOP.Tile.core.dpath.io_ctrl_imm_sel, support: 6113
+Next TOP.Tile.core.dpath.brCond.eq -> TOP.Tile.core.dpath.brCond.neq, support: 5457
+Eventual TOP.Tile.core.dpath.io_ctrl_imm_sel -> TOP.Tile.core.dpath.regFile_io_wen, support: 4466
+Until TOP.Tile.icache.io_cpu_req_valid -> TOP.Tile.icache.is_idle, support: 4359
+Until TOP.Tile.icache.io_cpu_req_valid -> TOP.Tile.icache.is_read, support: 4359
+Eventual TOP.Tile.icache.io_cpu_req_valid -> TOP.Tile.icache.is_read, support: 4336
+Until TOP.Tile.icache.io_cpu_req_valid -> TOP.Tile.core.dpath.csr_io_stall, support: 4318
+  \end{minted}
+
+  Some diamonds in the rough:
+  \begin{minted}[breaklines, fontsize=\scriptsize]{text}
+Next TOP.Tile.core.dpath.csr.isEcall -> TOP.Tile.dcache_io_cpu_abort, support: 45
+  \end{minted}
+\end{frame}
+
 \begin{frame}[fragile]{Bug Localization}
-Can typos or copy/paste mistakes be caught?
+  Can typos or copy/paste mistakes be caught? (\texttt{Control.scala})
   \begin{minted}{scala}
    io.csr_cmd := ctrlSignals(11)
 -  io.illegal := ctrlSignals(12)
@@ -280,7 +299,24 @@ ERROR on property Until TOP.Tile.core.dpath.csr.io_illegal -> TOP.Tile.core.ctrl
   \end{minted}
 \end{frame}
 
-\begin{frame}{Challenges}
+\begin{frame}[fragile]{More Bug Localization}
+  Can selectively used signals incorrectly assigned be caught? (\texttt{Cache.scala})
+  \begin{minted}{scala}
+-  hit := v(idx_reg) && rmeta.tag === tag_reg
++  hit := v(idx_reg) && rmeta.tag =/= tag_reg
+  \end{minted}
+
+  Some ISA tests passed (don't hit the cache), but matmul failed:
+  \begin{minted}[breaklines, fontsize=\scriptsize]{text}
+python checker.py --start-time 12 --signal-bit-limit 4 multiply-riscv.vcd riscv_mini.props
+ERROR on property Until TOP.Tile.arb_io_dcache_r_ready -> TOP.Tile.dcache.hit with support 24 at time 418
+ERROR on property Until TOP.Tile.dcache_io_nasti_r_valid -> TOP.Tile.dcache.hit with support 24 at time 418
+ERROR on property Until TOP.Tile.dcache.is_alloc -> TOP.Tile.dcache.hit with support 24 at time 418
+ERROR on property Until TOP.Tile.arb.io_dcache_ar_ready -> TOP.Tile.arb_io_nasti_r_ready with support 4173 at time 640
+  \end{minted}
+\end{frame}
+
+\begin{frame}{Issues}
   \begin{itemize}
     \setlength\itemsep{0.75em}
     \item Many of the specs are meaningless or require very specific behaviors to falsify

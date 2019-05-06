@@ -1,6 +1,6 @@
 import sys
-from typing import Tuple
-from analysis import Property, MinerResult, Eventual
+from typing import Tuple, List
+from analysis import Property, MinerResult, Eventual, PropertyStats
 from vcd import VCDData, read_vcd_clean
 import argparse
 import pickle
@@ -33,14 +33,18 @@ if __name__ == "__main__":
     print("Checker called with arguments: {}".format(args))
 
     module_tree, vcd_data = read_vcd_clean(args.vcd_file[0], args.start_time, args.signal_bit_limit)
-    good = True
+    violated_props = []  # type: List[Tuple[Property, PropertyStats, int]]
     with open(args.prop_file[0], 'rb') as prop_f:
         props = pickle.load(prop_f)  # type: MinerResult
         for (prop, stats) in props.items():
             if stats.falsified is False:
                 not_violated, falsified_time = check(prop, vcd_data)
                 if not not_violated:
-                    print("ERROR on property {} with support {} at time {}".format(prop, stats.support, falsified_time))
-                    good = False
-    if not good:
+                    violated_props.append((prop, stats, falsified_time))
+
+    violated_props_sorted = sorted(violated_props, key=lambda x: x[2])
+    for (prop, stats, falsified_time) in violated_props_sorted:
+        print("ERROR on property {} with support {} at time {}".format(prop, stats.support, falsified_time))
+
+    if len(violated_props) > 0:
         sys.exit(1)
