@@ -1,4 +1,5 @@
 # Analyze riscv-mini via spec mining and combining
+import sys
 import os
 from vcd import read_vcd_clean
 from analysis import Property
@@ -28,8 +29,12 @@ if __name__ == "__main__":
         print(p.__class__.__name__, p.a, p.b, s.support)
 
     print("Checking mined properties against golden traces")
+    good = True
     for vcd in vcd_files:
         module_tree, vcd_data = read_vcd_clean(VCD_ROOT + vcd, start_time, bit_limit)
         for p in stripped_props.keys():
             if not check(p, vcd_data):
+                good = False
                 print("ERROR on property {} on vcd file {}".format(p, vcd))
+    if not good:
+        sys.exit(1)

@@ -1,5 +1,5 @@
-from vcd import Event, Module, Signal, VCDData, DeltaTrace
-from typing import List, FrozenSet, Dict, Tuple, Iterator, Optional, Set, Callable
+from vcd import Event, Module, VCDData, DeltaTrace, AliasedSignals
+from typing import Dict, Tuple, Iterator, Optional
 import itertools
 from dataclasses import dataclass
 
@@ -13,13 +13,20 @@ class PropertyStats:
 
 @dataclass(frozen=True, eq=False)
 class Property:
-    a: FrozenSet[Signal]
-    b: FrozenSet[Signal]
-    # TODO: these classes should be split
-    stats: PropertyStats
+    a: AliasedSignals
+    b: AliasedSignals
 
     def mine(self, a: DeltaTrace, b: DeltaTrace) -> PropertyStats:
         pass
+
+    def clean_set(self, x: AliasedSignals) -> str:
+        return list(x)[0].name
+
+    def __repr__(self) -> str:
+        return "{} {} -> {}".format(self.__class__.__name__, self.clean_set(self.a), self.clean_set(self.b))
+
+    def __str__(self) -> str:
+        return "{} {} -> {}".format(self.__class__.__name__, self.clean_set(self.a), self.clean_set(self.b))
 
     def __eq__(self, other) -> bool:
         return self.__class__.__name__ == other.__class__.__name__ and \
@@ -33,12 +40,12 @@ class Property:
 @dataclass(frozen=True, eq=False)
 class Alternating(Property):
     def mine(self, a: DeltaTrace, b: DeltaTrace) -> PropertyStats: return mine_alternating(a, b)
-    def __repr__(self) -> str:
-        return "Alternating {} -> {}, support = {}".format(self.a, self.b, self.stats.support)
+
     def __eq__(self, other) -> bool:
         return self.__class__.__name__ == other.__class__.__name__ and \
                self.a == other.a and \
                self.b == other.b
+
     def __hash__(self) -> int:
         return self.__class__.__name__.__hash__() + self.a.__hash__() + self.b.__hash__()
 
@@ -46,12 +53,12 @@ class Alternating(Property):
 @dataclass(frozen=True, eq=False)
 class Next(Property):
     def mine(self, a: DeltaTrace, b: DeltaTrace) -> PropertyStats: return mine_next(a, b)
-    def __repr__(self) -> str:
-        return "Next {} -> {}, support = {}".format(self.a, self.b, self.stats.support)
+
     def __eq__(self, other) -> bool:
         return self.__class__.__name__ == other.__class__.__name__ and \
                self.a == other.a and \
                self.b == other.b
+
     def __hash__(self) -> int:
         return self.__class__.__name__.__hash__() + self.a.__hash__() + self.b.__hash__()
 
@@ -59,12 +66,12 @@ class Next(Property):
 @dataclass(frozen=True, eq=False)
 class Until(Property):
     def mine(self, a: DeltaTrace, b: DeltaTrace) -> PropertyStats: return mine_until(a, b)
-    def __repr__(self) -> str:
-        return "Until {} -> {}, support = {}".format(self.a, self.b, self.stats.support)
+
     def __eq__(self, other) -> bool:
         return self.__class__.__name__ == other.__class__.__name__ and \
                self.a == other.a and \
                self.b == other.b
+
     def __hash__(self) -> int:
         return self.__class__.__name__.__hash__() + self.a.__hash__() + self.b.__hash__()
 
@@ -72,19 +79,22 @@ class Until(Property):
 @dataclass(frozen=True, eq=False)
 class Eventual(Property):
     def mine(self, a: DeltaTrace, b: DeltaTrace) -> PropertyStats: return mine_evenutual(a, b)
-    def __repr__(self) -> str:
-        return "Eventual {} -> {}, support = {}".format(self.a, self.b, self.stats.support)
+
     def __eq__(self, other) -> bool:
         return self.__class__.__name__ == other.__class__.__name__ and \
                self.a == other.a and \
                self.b == other.b
+
     def __hash__(self) -> int:
         return self.__class__.__name__.__hash__() + self.a.__hash__() + self.b.__hash__()
 
 
+MinerResult = Dict[Property, PropertyStats]
+
+
 # Combine a and b delta traces into 1 delta trace which consists of tuples indicating
 # whether a, b, or both occurred at a timestep
-def zip_delta_traces(a: List[Event], b: List[Event]) -> Iterator[Tuple[Optional[Event], Optional[Event]]]:
+def zip_delta_traces(a: DeltaTrace, b: DeltaTrace) -> Iterator[Tuple[Optional[Event], Optional[Event]]]:
     a_idx, b_idx = 0, 0
     while a_idx < len(a) or b_idx < len(b):
         # received an 'a' and 'b' on the same cycle
@@ -107,7 +117,7 @@ def zip_delta_traces(a: List[Event], b: List[Event]) -> Iterator[Tuple[Optional[
 
 
 # This pattern is only really legitimate when used with boolean control signals
-def mine_alternating(a: List[Event], b: List[Event]) -> PropertyStats:
+def mine_alternating(a: DeltaTrace, b: DeltaTrace) -> PropertyStats:
     # If a == b, they have identical events, and although are strictly alternating, that
     # strict definition is useless for verification since a and b are identically sourced
     if a == b:
@@ -135,7 +145,7 @@ def mine_alternating(a: List[Event], b: List[Event]) -> PropertyStats:
     return PropertyStats(support=support, falsifiable=falsifiable, falsified=False)
 
 
-def mine_next(a: List[Event], b: List[Event], clk_period: int = 2) -> PropertyStats:
+def mine_next(a: DeltaTrace, b: DeltaTrace, clk_period: int = 2) -> PropertyStats:
     automaton_state = 0
     falsifiable, support = False, 0
     a_event_time = 0
@@ -166,7 +176,7 @@ def mine_next(a: List[Event], b: List[Event], clk_period: int = 2) -> PropertySt
     return PropertyStats(support=support, falsifiable=falsifiable, falsified=False)
 
 
-def mine_evenutual(a: List[Event], b: List[Event]) -> PropertyStats:
+def mine_evenutual(a: DeltaTrace, b: DeltaTrace) -> PropertyStats:
     automaton_state = 0
     falsifiable, support = False, 0
     for t in zip_delta_traces(a, b):
@@ -199,11 +209,10 @@ def mine_evenutual(a: List[Event], b: List[Event]) -> PropertyStats:
         else:
             assert False, "should not get here"
     # This property can never be falsified, so the support is the primary indicator of usefulness
-    # TODO: using falsifiable as hack to strip away eventual properties with no support
-    return PropertyStats(support=support, falsifiable=support > 0, falsified=False)
+    return PropertyStats(support=support, falsifiable=falsifiable, falsified=False)
 
 
-def mine_until(a: List[Event], b: List[Event]) -> PropertyStats:
+def mine_until(a: DeltaTrace, b: DeltaTrace) -> PropertyStats:
     automaton_state = 0
     falsifiable, support = False, 0
     for t in zip_delta_traces(a, b):
@@ -233,7 +242,7 @@ def mine_until(a: List[Event], b: List[Event]) -> PropertyStats:
     return PropertyStats(support=support, falsifiable=falsifiable, falsified=False)
 
 
-def mine(module: Module, vcd_data: Dict[FrozenSet[Signal], List[Event]]) -> Set[Property]:
+def mine_module(module: Module, vcd_data: VCDData) -> MinerResult:
     # Strip vcd_data so it only contains signals that are directly inside this module
     # and only mine permutations of signals directly inside a given module instance
     def signal_in_module(signal: str, module: str):
@@ -244,16 +253,31 @@ def mine(module: Module, vcd_data: Dict[FrozenSet[Signal], List[Event]]) -> Set[
     vcd_data_scoped = {signal_set: trace for (signal_set, trace) in vcd_data.items()
                        if any([signal_in_module(s.name, module.name) for s in signal_set])}
 
-    ret_set = set()
-    miners = [mine_alternating, mine_next, mine_evenutual, mine_until]  # type: List[Callable[[List[Event], List[Event]], PropertyStats]]
+    result = {}  # type: MinerResult
     property_classes = [Alternating, Next, Eventual, Until]
     print("Mining module = {}".format(module.name))
     for combo in itertools.permutations(vcd_data_scoped.keys(), 2):
-        for (miner, property_class) in zip(miners, property_classes):
-            pattern_stats = miner(vcd_data_scoped[combo[0]], vcd_data_scoped[combo[1]])
+        for prop_type in property_classes:
+            a = vcd_data_scoped[combo[0]]
+            b = vcd_data_scoped[combo[1]]
+            prop = prop_type(combo[0], combo[1])
+            pattern_stats = prop.mine(a, b)
             if pattern_stats.falsifiable:
-                ret_set.add(property_class(frozenset(combo[0]), frozenset(combo[1]), pattern_stats))
-    return ret_set
+                result[prop] = pattern_stats
+    return result
+
+
+def mine_modules_recurse(module: Module, vcd_data: VCDData) -> MinerResult:
+    # Walk the module tree with DFS (iterative preorder traversal)
+    module_queue = [module]
+    result = {}  # type: MinerResult
+    while len(module_queue) > 0:
+        module = module_queue.pop()
+        module_mine = mine_module(module, vcd_data)
+        for (k, v) in module_mine.items():
+            result[k] = v
+        module_queue.extend(module.children)
+    return result
 
 
 if __name__ == "__main__":
