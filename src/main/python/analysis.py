@@ -11,7 +11,7 @@ class PropertyStats:
     falsified: bool
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class Property:
     a: FrozenSet[Signal]
     b: FrozenSet[Signal]
@@ -26,33 +26,60 @@ class Property:
                self.a == other.a and \
                self.b == other.b
 
+    def __hash__(self) -> int:
+        return self.__class__.__name__.__hash__() + self.a.__hash__() + self.b.__hash__()
 
-@dataclass(frozen=True)
+
+@dataclass(frozen=True, eq=False)
 class Alternating(Property):
     def mine(self, a: DeltaTrace, b: DeltaTrace) -> PropertyStats: return mine_alternating(a, b)
     def __repr__(self) -> str:
         return "Alternating {} -> {}, support = {}".format(self.a, self.b, self.stats.support)
+    def __eq__(self, other) -> bool:
+        return self.__class__.__name__ == other.__class__.__name__ and \
+               self.a == other.a and \
+               self.b == other.b
+    def __hash__(self) -> int:
+        return self.__class__.__name__.__hash__() + self.a.__hash__() + self.b.__hash__()
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class Next(Property):
     def mine(self, a: DeltaTrace, b: DeltaTrace) -> PropertyStats: return mine_next(a, b)
     def __repr__(self) -> str:
         return "Next {} -> {}, support = {}".format(self.a, self.b, self.stats.support)
+    def __eq__(self, other) -> bool:
+        return self.__class__.__name__ == other.__class__.__name__ and \
+               self.a == other.a and \
+               self.b == other.b
+    def __hash__(self) -> int:
+        return self.__class__.__name__.__hash__() + self.a.__hash__() + self.b.__hash__()
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class Until(Property):
     def mine(self, a: DeltaTrace, b: DeltaTrace) -> PropertyStats: return mine_until(a, b)
     def __repr__(self) -> str:
         return "Until {} -> {}, support = {}".format(self.a, self.b, self.stats.support)
+    def __eq__(self, other) -> bool:
+        return self.__class__.__name__ == other.__class__.__name__ and \
+               self.a == other.a and \
+               self.b == other.b
+    def __hash__(self) -> int:
+        return self.__class__.__name__.__hash__() + self.a.__hash__() + self.b.__hash__()
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class Eventual(Property):
     def mine(self, a: DeltaTrace, b: DeltaTrace) -> PropertyStats: return mine_evenutual(a, b)
     def __repr__(self) -> str:
         return "Eventual {} -> {}, support = {}".format(self.a, self.b, self.stats.support)
+    def __eq__(self, other) -> bool:
+        return self.__class__.__name__ == other.__class__.__name__ and \
+               self.a == other.a and \
+               self.b == other.b
+    def __hash__(self) -> int:
+        return self.__class__.__name__.__hash__() + self.a.__hash__() + self.b.__hash__()
 
 
 # Combine a and b delta traces into 1 delta trace which consists of tuples indicating

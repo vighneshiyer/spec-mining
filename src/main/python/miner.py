@@ -21,7 +21,7 @@ def mine_from_vcd(vcd_file_path: str, start_time: int, signal_bit_limit: int) ->
         mined_properties.update(mine(module, vcd_data))
         module_queue.extend(module.children)
 
-    mined_properties = set(filter(lambda p: p.stats.support > 0, mined_properties))
+    #mined_properties = set(filter(lambda p: p.stats.support > 0, mined_properties))
     return mined_properties
 
 
