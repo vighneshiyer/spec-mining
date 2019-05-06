@@ -6,14 +6,22 @@ from miner import mine_modules_recurse
 from merger import merge_props
 from joblib import Parallel, delayed
 from checker import check
+import argparse
+import pickle
 
 if __name__ == "__main__":
-    VCD_ROOT = '/home/vighnesh/20-research/24-repos/riscv-mini/outputs/'
-    vcd_files = list(filter(lambda f: 'vcd' in f and 'rv32ui-p-' in f, os.listdir(VCD_ROOT)))
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--dump-file', type=str)
+    parser.add_argument('--riscv-mini-root', type=str)
+    args = parser.parse_args()
+    print("riscv-mini analysis called with arguments: {}".format(args))
+
+    vcd_root = args.riscv_mini_root + "/outputs/"
+    vcd_files = list(filter(lambda f: 'vcd' in f and 'rv32ui-p-' in f, os.listdir(vcd_root)))
     start_time = 12
     bit_limit = 4
 
-    vcd_data = [read_vcd_clean(VCD_ROOT + vcd, start_time, bit_limit) for vcd in vcd_files]
+    vcd_data = [read_vcd_clean(vcd_root + vcd, start_time, bit_limit) for vcd in vcd_files]
     props = Parallel(n_jobs=4)(delayed(mine_modules_recurse)(module, data) for (module, data) in vcd_data)
 
     print("Merging mined properties")
@@ -37,3 +45,7 @@ if __name__ == "__main__":
                 print("ERROR on property {}".format(p))
     if not good:
         sys.exit(1)
+
+    if args.dump_file is not None:
+        with open(args.dump_file, 'wb') as f:
+            pickle.dump(stripped_props, f)
