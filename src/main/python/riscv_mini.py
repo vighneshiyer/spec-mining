@@ -18,9 +18,9 @@ if __name__ == "__main__":
 
     vcd_files = list(filter(lambda f: 'vcd' in f and (('rv32ui-p-' in f) or ('rv32mi-p-' in f)), os.listdir(args.vcd_root)))
     start_time = 12
-    bit_limit = 8
+    bit_limit = 5
 
-    vcd_data = [read_vcd_clean(args.vcd_root + vcd, start_time, bit_limit) for vcd in vcd_files]
+    vcd_data = Parallel(n_jobs=4)(delayed(read_vcd_clean)(args.vcd_root + vcd, start_time, bit_limit) for vcd in vcd_files)
     props = Parallel(n_jobs=4)(delayed(mine_modules_recurse)(module, data) for (module, data) in vcd_data)
 
     print("Merging mined properties")

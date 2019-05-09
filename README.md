@@ -66,3 +66,15 @@ python main.py --start-time 10 --signal-bit-width 5 /path/to/riscv-mini/outputs/
 - Abstract deadline on May 31st, paper one week later
 - OK to publish a work-in-progress paper if we don't have anything impressive
 - Donggyu suggests to modify `riscv-mini/CSR.scala` line 206 about `isEbreak` which should cause failure of a `rv32mi` test. Plan to gather specs on the golden riscv-mini, then introduce the bug and replay the failing test while monitoring for the specs to be violated. Hopefully should be caught.
+
+# Final Presentation
+- Look at the riscv-mini issues and try to replicate a subtle bug and see if it can be caught by the spec miner
+- Improve scalability by refining the set of signals that are mined on
+    - Wenchao gives some ideas in his thesis
+    - Look at Texada too
+    - Use module hierararchy and only mine on ports (not internal module state). Give higher precedence to intermediary modules in the hierarchy rather than the top-level or the bottommost leaves
+- Put the numbers in perspective
+    - How many signals are in riscv-mini, how many modules, show a diagram? Compare with rocket-chip and others.
+    - How many specs were mined, how did the spec merging evolve the mined specs as more VCDs were added?
+    - How many of each spec type were mined?
+    - How many specs resided in each module?
