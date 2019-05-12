@@ -78,3 +78,6 @@ python main.py --start-time 10 --signal-bit-width 5 /path/to/riscv-mini/outputs/
     - How many specs were mined, how did the spec merging evolve the mined specs as more VCDs were added?
     - How many of each spec type were mined?
     - How many specs resided in each module?
+- Show diagrams of the automata that are used for mining (annotated from the SPOT emitted version)
+- Show examples of support
+- Show the merging algorithm
