@@ -1,4 +1,4 @@
-\documentclass[sigconf]{acmart}
+\documentclass[acmlarge,11pt]{acmart}
 \usepackage{minted}
 
 % Remove DOI info
@@ -8,13 +8,15 @@
 
 \settopmatter{printacmref=false} % Removes citation information below abstract
 \renewcommand\footnotetextcopyrightpermission[1]{} % removes footnote with conference information in first column
-\pagestyle{plain} % removes running headers
+\pagestyle{empty} % removes running headers
 
 \AtBeginDocument{%
   \providecommand\BibTeX{{%
     \normalfont B\kern-0.5em{\scshape i\kern-0.25em b}\kern-0.8em\TeX}}}
 
 \setcopyright{none}
+
+\fancyfoot{}
 
 \begin{document}
 \title{DRILLS: Debugging RTL Intelligently with Localization from Long-Simulation}
@@ -28,12 +30,13 @@
 \renewcommand{\shortauthors}{Iyer and Kim}
 
 \begin{abstract}
-  As RTL design complexity increases it is more difficult to debug failing tests that 
+  With increasing RTL design complexity it is increasingly difficult to debug why a subset of tests fail in chip-level emulation. Commonly, realistic workloads are run on RTL being emulated on an FPGA and 
   from the use of powerful DSLs (Chisel) and higher levels of abstraction (HLS), the number of subtle bugs present in a design also increases.
   Many design bugs are difficult to catch with unit testing...
   %As hardware complexity increases to meet performance targets and implement required functionality, verification becomes much more challenging. A recent study shows that verification dominates time-to-market and it is getting worse over time\supercite{Foster}. Therefore, it is critical to invent effective hardware verification tools to alleviate time and manual effort to trace the root cause of a design bug.
 \end{abstract}
 \maketitle
+\thispagestyle{empty}
 \section{Introduction}
 Specification mining is a technique to extract LTL properties from a set of traces of signals.
 This technique can be applied for several purposes in the domain of digital hardware verification including:
@@ -51,11 +54,12 @@ These subtle bugs are usually caught when performing chip emulation or FPGA prot
 Real workloads usually involve traces that are billion of cycles long, and are thus too slow to perform using RTL simulation which provides full design visibility.
 DESSERT\cite{Kim_2018} demonstrates a technique to capture full-visibility waveform traces from fast running FPGA simulation.
 Using DESSERT, an out-of-order RISC-V processor (BOOM\cite{Celio_2015}) is deterministically emulated on an FPGA with runtime assertion monitors while running the SPEC2017 benchmark suite.
-During the execution of several tests, synthesized assertions were violated which revealed there exists some subtle bugs in the core causing the tests to fail.
+During the execution of several tests, synthesized assertions were violated which revealed there exists some subtle bugs in the core causing some benchmarks to fail.
 
-While these assertions are useful for catching errors, they are very high-level and don't direct the designer to where a bug originated. As an example, the "\texttt{Pipeline has hung}" assertion is generated with the following Chisel code:
+While these assertions are useful for catching errors, they are very high-level and don't direct the designer to where a bug originated.
+As an example, the "\texttt{Pipeline has hung}" assertion (in BOOM) is generated with the following Chisel code:
 
-\begin{minted}{scala}
+\begin{minted}[fontsize=\small]{scala}
 // detect pipeline freezes and throw error
 val idle_cycles = freechips.rocketchip.util.WideCounter(32)
 when (rob.io.commit.valids.asUInt.orR ||
@@ -69,21 +73,61 @@ assert (!(idle_cycles.value(13)), "Pipeline has hung.")
 
 In words, this says, "If there is a good reason to stall the pipeline, reset \texttt{idle\_cycles}, otherwise let it tick up to 13 before declaring something has gone wrong."
 This assertion does not give any insight as to what bad event happened, or when and where it happened.
-Since these assertions are thrown after billions of cycles it is possible that some latent state was corrupted early in the simulation and only triggered this assertion much later during execution.
+Since these assertions are thrown after billions of cycles it is possible that some $\mu$-arch state was corrupted early in the simulation and only triggered this assertion much later during execution.
 DESSERT enables extracting waveforms for a variable number of cycles before the assertion triggers, but even with the waveform dumps in hand, the designer was unable to localize the bug.
-Our aim in developing the specification mining tool is to hunt out the locations of these trickly bugs in BOOM and fix them.
+Our aim in developing this specification mining tool is to hunt out the locations of these trickly bugs in BOOM and fix them.
 
 \subsection{Hypothesis}
+Mature RTL designs (like BOOM) pass almost all tests run on them, including a full set of ISA tests, a boot of Linux, and real applications running on an OS.
+If a test fails on a mature design, we hypothesize that an \textit{assumption} the designer made about the RTL was violated somewhere and at some time during the failing test execution, that was not violated on any successful test execution.
+These assumptions can include believing that a certain register cannot hold certain values or higher-level properties such as: "the memory system will respond to my request within 5 cycles".
+
+We believe specification mining can be used to extract designer assumptions about the RTL design by mining fine-grained LTL properties on waveforms of successful test executions.
+These mined properties can be added to the RTL design as assertions and replaying the failing test should cause a violation of a mined property.
+These violations can be used to catch a faulty assumption \textit{earlier and with greater locality} than the high-level assertions originally present in the design.
 
 \subsection{Problem Definition}
+\par
+\textbf{Given}:
+\begin{itemize}
+  \item An RTL design driven with only one global clock
+  \item A large set of VCD (value change dump) files produced when running a full suite of tests in an RTL simulator
+  \item One or just a few failing tests in the suite characterized by a failed high-level assertion, hanging/global timeout, or a bad exit code
+\end{itemize}
+\textbf{Produce}:
+\begin{itemize}
+  \item A set of mined LTL properties involving signals (combinational nets and registers) of the RTL design that aren't violated on any passing test
+  \item A method of ranking the mined LTL properties
+  \item A program that can check a VCD against the mined properties to find any violations for that execution trace
+\end{itemize}
 
 \section{Approach}
+Our plan is to first create the products above with a small RTL design.
+We use \texttt{riscv-mini}\cite{riscv-mini}, a simple 3-stage in-order RISC-V processor as the RTL we will use to test the specification mining engine.
+\texttt{riscv-mini} has real instruction and data caches and implements the RV32UI ISA subset which is capable of running the entire \texttt{riscv-tests}\cite{riscv-tests} test suite.
+The test suite contains a comprehensive set of ISA tests and benchmarks which will be used to generate the VCD files for mining.
 
 \subsection{Prior Work}
+Specification mining has been applied to both software and hardware verification.
+% Mention Texada and Sanjit's Toyota paper
+% Mention Wenchao Li's thesis as the main inspiration
+% Mention SAT-based mux methods for bug localization and point out its shortcomings
 
 \subsection{High-Level Flow}
+The long-term plan is to leverage the spec mining engine and the prior work of DESSERT to provide an FPGA-acclererated debugging platform.
+We plan to take waveforms of successful test executions from RTL simulation and FPGA emulation of BOOM and feed the spec mining engine to infer LTL properties.
+The buggy RTL is instrumented by taking the LTL properties and converting them to property monitor FSMs which are stiched into the original design.
+The assertions are synthesized for FPGA emulation using the same methodology described in DESSERT, and the failing tests are executed.
+It is our hope that the failing tests will trigger failures in the mined properties before the failure becomes visible to the user (via a high-level assertion violation, hanging/timout, or a bad exit code).
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.8\textwidth]{figs/proposed_approach.pdf}
+  \caption{The proposed tool flow to use specification mining and FPGA-accelerated simulation to pinpoint bug locations in for an RTL design .}
+  \label{fig:proposed_approach}
+\end{figure}
+The mined properties which were violated can be ranked based on the time of their violation and we can use the SAT localization techniques mentioned above to further pinpoint the bug location.
 
-\section{Spec Mining Engine and Algorithms}
+\section{Algorithms}
 
 \subsection{Delta Traces}
 
@@ -92,8 +136,11 @@ Our aim in developing the specification mining tool is to hunt out the locations
 \subsection{Mining with Automata}
 % Support, confidence, falsifiability, falsification
 
+\subsection{Merging Properties}
+
+\subsection{Checking Against VCDs}
+
 \section{Challenges}
-% 
 
 \section{Results}
 
@@ -105,39 +152,6 @@ Our aim in developing the specification mining tool is to hunt out the locations
 
 \subsection{Feedback}
 
-If you are new to publishing with ACM, this document is a valuable
-guide to the process of preparing your work for publication. If you
-have published with ACM before, this document provides insight and
-instruction into more recent changes to the article template.
-
-The ``\verb|acmart|'' document class can be used to prepare articles
-for any ACM publication --- conference or journal, and for any stage
-of publication, from review to final ``camera-ready'' copy, to the
-author's own version, with {\itshape very} few changes to the source.
-
-\section{Template Overview}
-As noted in the introduction, the ``\verb|acmart|'' document class can
-be used to prepare many different kinds of documentation --- a
-double-blind initial submission of a full-length technical paper, a
-two-page SIGGRAPH Emerging Technologies abstract, a ``camera-ready''
-journal article, a SIGCHI Extended Abstract, and more --- all by
-selecting the appropriate {\itshape template style} and {\itshape
-  template parameters}.
-
-This document will explain the major features of the document
-class. For further information, the {\itshape \LaTeX\ User's Guide} is
-available from
-\url{https://www.acm.org/publications/proceedings-template}.
-
-\subsection{Template Styles}
-
-The primary parameter given to the ``\verb|acmart|'' document class is
-the {\itshape template style} which corresponds to the kind of publication
-or SIG publishing the work. This parameter is enclosed in square
-brackets and is a part of the {\verb|documentclass|} command:
-\begin{verbatim}
-  \documentclass[STYLE]{acmart}
-\end{verbatim}
 
 Journals use one of three template styles. All but three ACM journals
 use the {\verb|acmsmall|} template style:
