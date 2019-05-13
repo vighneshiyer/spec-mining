@@ -1,4 +1,5 @@
 \documentclass[sigconf]{acmart}
+\usepackage{minted}
 
 % Remove DOI info
 \makeatletter
@@ -27,7 +28,8 @@
 \renewcommand{\shortauthors}{Iyer and Kim}
 
 \begin{abstract}
-  As RTL design productivity increases from the use of embedded DSLs (Chisel) and higher levels of abstraction (HLS), the number of subtle bugs present in a design also increases.
+  As RTL design complexity increases it is more difficult to debug failing tests that 
+  from the use of powerful DSLs (Chisel) and higher levels of abstraction (HLS), the number of subtle bugs present in a design also increases.
   Many design bugs are difficult to catch with unit testing...
   %As hardware complexity increases to meet performance targets and implement required functionality, verification becomes much more challenging. A recent study shows that verification dominates time-to-market and it is getting worse over time\supercite{Foster}. Therefore, it is critical to invent effective hardware verification tools to alleviate time and manual effort to trace the root cause of a design bug.
 \end{abstract}
@@ -38,14 +40,38 @@ This technique can be applied for several purposes in the domain of digital hard
 \begin{enumerate}
   \item Developing a suite of assertions to be used for design regressions: once a design is mature, most of the interface boundary specifications are well defined and fine-grained assertions derived from specification mining can help catch regressions when design refinements or optimizations are being made.
   \item A starting point for formally specifying a design: once a design can pass random-stimulus based and directed unit tests, specification mining can be used to extract properties that have been consistently observed in the test waveforms. These properties can then be used as assertions to prove formally.
-  \item Early anomaly detection and localization on long-running tests on mature RTL: if a specific test fails on an RTL design while many other tests pass, specification mining can reveal \textit{where and when} a failing test begins to produce unusual behavior in the RTL.
+  \item Early anomaly detection and localization on long-running tests on mature RTL: if a specific test fails on an RTL design while many other tests pass, specification mining can reveal \textit{where and when} a failing test begins to produce unusual behavior in the RTL, guiding the designer to the bug location.
 \end{enumerate}
-In this report, we will primarily focus on applying specification mining to address the last point above.
+In this report, we will focus on applying specification mining to address the last point above.
 
 \subsection{Motivation}
 RTL designs are increasing in complexity and are thus more prone to having subtle bugs that are not caught in regular verification flows. Typical techniques such as randomized-stimulus testing, directed testing, and fuzz testing have a difficult time catching bugs that require the RTL be put into a very specific state.
 
-These subtle bugs are usually caught when performing chip emulation or FPGA prototyping and 
+These subtle bugs are usually caught when performing chip emulation or FPGA prototyping when running realistic workloads on the RTL.
+Real workloads usually involve traces that are billion of cycles long, and are thus too slow to perform using RTL simulation which provides full design visibility.
+DESSERT\cite{Kim_2018} demonstrates a technique to capture full-visibility waveform traces from fast running FPGA simulation.
+Using DESSERT, an out-of-order RISC-V processor (BOOM\cite{Celio_2015}) is deterministically emulated on an FPGA with runtime assertion monitors while running the SPEC2017 benchmark suite.
+During the execution of several tests, synthesized assertions were violated which revealed there exists some subtle bugs in the core causing the tests to fail.
+
+While these assertions are useful for catching errors, they are very high-level and don't direct the designer to where a bug originated. As an example, the "\texttt{Pipeline has hung}" assertion is generated with the following Chisel code:
+
+\begin{minted}{scala}
+// detect pipeline freezes and throw error
+val idle_cycles = freechips.rocketchip.util.WideCounter(32)
+when (rob.io.commit.valids.asUInt.orR ||
+      csr.io.csr_stall ||
+      io.rocc.busy ||
+      reset.asBool) {
+  idle_cycles := 0.U
+}
+assert (!(idle_cycles.value(13)), "Pipeline has hung.")
+\end{minted}
+
+In words, this says, "If there is a good reason to stall the pipeline, reset \texttt{idle\_cycles}, otherwise let it tick up to 13 before declaring something has gone wrong."
+This assertion does not give any insight as to what bad event happened, or when and where it happened.
+Since these assertions are thrown after billions of cycles it is possible that some latent state was corrupted early in the simulation and only triggered this assertion much later during execution.
+DESSERT enables extracting waveforms for a variable number of cycles before the assertion triggers, but even with the waveform dumps in hand, the designer was unable to localize the bug.
+Our aim in developing the specification mining tool is to hunt out the locations of these trickly bugs in BOOM and fix them.
 
 \subsection{Hypothesis}
 

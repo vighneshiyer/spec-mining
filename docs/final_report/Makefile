@@ -5,10 +5,10 @@ PDF = spec_mining_final_report.pdf
 all:  ${PDF}
 
 %.pdf: %.tex $(PACKAGE).cls ACM-Reference-Format.bst
-	texfot pdflatex $<
+	texfot pdflatex --shell-escape $<
 	bibtex $(basename $<)
-	texfot pdflatex $<
-	texfot pdflatex $<
+	texfot pdflatex --shell-escape $<
+	texfot pdflatex --shell-escape $<
 	#- cd $(dir $@) && bibtex $(notdir $(basename $<))
 	#cd $(dir $@) && pdflatex $(notdir $<)
 	#cd $(dir $@) && pdflatex $(notdir $<)
