@@ -353,50 +353,111 @@ The automaton had to work with compressed delta trace inputs which complicates s
 \section{Results}
 We apply our specification mining engine to \texttt{riscv-mini} which has the module hierarchy and number of signals in table \ref{tab:riscv-mini}.
 \begin{table}
-  \caption{Module hierarchy and number of signals under consideration for mining for \texttt{riscv-mini}}
+  \caption{Module hierarchy, number of signals under consideration for mining for \texttt{riscv-mini}, and mined properties for 2 ISA tests}
   \label{tab:riscv-mini}
-  \begin{tabular}{ll}
+  \begin{tabular}{llll}
     \toprule
-    Modules & Num of Signals \\
+    Module & Number of Signals & Props Mined on add & Props Mined on sw\\
     \midrule
-    TOP & 4 \\
-    TOP.Tile & 15 \\
-    TOP.Tile.icache & 18 \\
-    TOP.Tile.dcache & 4 \\
-    TOP.Tile.core & 12 \\
-    TOP.Tile.core.dpath & 23 \\
-    TOP.Tile.core.dpath.regFile & 4 \\
-    TOP.Tile.core.dpath.immGen & 1 \\
-    TOP.Tile.core.dpath.csr & 16 \\
-    TOP.Tile.core.dpath.brCond & 8 \\
-    TOP.Tile.core.dpath.alu & 3 \\
-    TOP.Tile.core.ctrl & 9 \\
-    TOP.Tile.arb & 11\\
+    TOP & 4 & 45 & 45 \\
+    TOP.Tile & 15 & 791 & 1529 \\
+    TOP.Tile.icache & 18 & 1113 & 1113 \\
+    TOP.Tile.dcache & 4 & 43 & 1965 \\
+    TOP.Tile.core & 12 & 565 & 973 \\
+    TOP.Tile.core.dpath & 23 & 2149 & 3308 \\
+    TOP.Tile.core.dpath.regFile & 4 & 43 & 43\\
+    TOP.Tile.core.dpath.immGen & 1 & 0 & 0 \\
+    TOP.Tile.core.dpath.csr & 16 & 849 & 1080 \\
+    TOP.Tile.core.dpath.brCond & 8 & 261 & 261\\
+    TOP.Tile.core.dpath.alu & 3 & 24 & 24 \\
+    TOP.Tile.core.ctrl & 9 & 333 & 403 \\
+    TOP.Tile.arb & 11 & 430 & 683 \\
   \bottomrule
   \end{tabular}
 \end{table}
-% Number of signals in riscv-mini, how many modules, show a diagram, compare with rocket-chip
 % How many specs were mined, how did the spec merging evolve the mined specs as more VCDs were added?
 % How many of each spec type were mined?
 % How many specs resided in each module?
 
+We also record the number of properties mined for each module for 2 different tests that stress different parts of the processor.
+The \texttt{add} test does not stress the memory system and data cache as much as the \texttt{sw} test and this can be seen in the modules where the discrepency between the number of mined properties is highest.
+
+We mined properties on all VCD traces produced by the \texttt{riscv-mini} ISA test suite and merged them together.
+When merging properties, many of them are falsified and we are left with only \textbf{3251} properties at the end.
+Here is an exerpt of the mined properties with the highest support:
+
+\begin{minted}[breaklines, fontsize=\footnotesize]{text}
+Until TOP.Tile.core.ctrl.io_A_sel -> TOP.Tile.core.dpath.io_ctrl_imm_sel, support: 6113
+Next TOP.Tile.core.dpath.brCond.eq -> TOP.Tile.core.dpath.brCond.neq, support: 5457
+Eventual TOP.Tile.core.dpath.io_ctrl_imm_sel -> TOP.Tile.core.dpath.regFile_io_wen, support: 4466
+Until TOP.Tile.icache.io_cpu_req_valid -> TOP.Tile.icache.is_idle, support: 4359
+Until TOP.Tile.icache.io_cpu_req_valid -> TOP.Tile.icache.is_read, support: 4359
+Eventual TOP.Tile.icache.io_cpu_req_valid -> TOP.Tile.icache.is_read, support: 4336
+Until TOP.Tile.icache.io_cpu_req_valid -> TOP.Tile.core.dpath.csr_io_stall, support: 4318
+\end{minted}
+
+Some of these properties are interesting, but ultimately many of them are redundant or obvious (such as mining next on a shift register).
+Some of the properties that a human designer would identify as valuable have lower levels of support, such as:
+
+\begin{minted}[breaklines, fontsize=\footnotesize]{text}
+Next TOP.Tile.core.dpath.csr.isEcall -> TOP.Tile.dcache_io_cpu_abort, support: 45
+\end{minted}
+
+The reader may notice that these properties appear to be mined across module boundaries, contrary to the algorithm as stated.
+This is because many signals are aliased across module boundaries and the mined properties printout just shows one alias of the signal.
+
+\subsection{Bug Localization}
+We introduce a bug in \texttt{Control.scala} that mimics a copy/paste bug:
+\begin{minted}{scala}
+   io.csr_cmd := ctrlSignals(11)
+-  io.illegal := ctrlSignals(12)
++  io.illegal := ctrlSignals(11)
+\end{minted}
+This bug caused the \texttt{sub} ISA test to hang, so after letting it time out, the failing VCD was checked against the mined properties.
+\begin{minted}[breaklines, fontsize=\footnotesize]{text}
+ERROR on property Until TOP.Tile.core.dpath.csr.io_illegal -> TOP.Tile.icache.io_cpu_req_valid
+ERROR on property Until TOP.Tile.core.dpath.csr.io_illegal -> TOP.Tile.icache.io_cpu_resp_valid
+ERROR on property Until TOP.Tile.core.dpath.csr.io_illegal -> TOP.Tile.core.ctrl.io_A_sel
+\end{minted}
+
+The violated properties directly point to something wrong with the \texttt{io\_illegal} signal, and effectively localize the bug.
+
+We introduced another bug in \texttt{Cache.scala}:
+\begin{minted}{scala}
+-  hit := v(idx_reg) && rmeta.tag === tag_reg
++  hit := v(idx_reg) && rmeta.tag =/= tag_reg
+\end{minted}
+
+This bug does not affect most ISA tests but a multiply benchmark failed via hanging.
+After checking the VCD against the mined properties, we found these violations ranked by time of violation:
+\begin{minted}[breaklines, fontsize=\scriptsize]{text}
+ERROR on property Until TOP.Tile.arb_io_dcache_r_ready -> TOP.Tile.dcache.hit with support 24 at time 418
+ERROR on property Until TOP.Tile.dcache_io_nasti_r_valid -> TOP.Tile.dcache.hit with support 24 at time 418
+ERROR on property Until TOP.Tile.dcache.is_alloc -> TOP.Tile.dcache.hit with support 24 at time 418
+ERROR on property Until TOP.Tile.arb.io_dcache_ar_ready -> TOP.Tile.arb_io_nasti_r_ready with support 4173 at time 640
+\end{minted}
+
+Yet again, the violated properties point to something wrong with the \texttt{hit} signal and localize the bug.
+
 \subsection{Future Work}
-% Additional templates
-% Faster miner (software engineering)
-% Custom ways to construct AP traces from signal traces (ready/valid boundary, using boolean signals directly, etc.)
-% General miner (take any LTL formula and construct a miner automatically)
+There are quite a few things to improve:
+\begin{itemize}
+  \item Add additional LTL templates that mine on boolean signal traces and delta event traces
+  \item Prune away mined properties that are statically provable (such as shift registers)
+  \item Develop a faster VCD parser to allow mining over larger VCD files
+  \item Generalize the miner to take any LTL formula and automatically construct an automaton to mine the template
+  \item Construct traces of atomic propositions from user-defined events (such as ready/valid transactions firing)
+  \item Introduce more subtle bugs in \texttt{riscv-mini} and check whether they can be caught
+\end{itemize}
 
-\section{Course-Related}
+\section{Course-Related Stuff}
+Donggyu provided the inspiration and motivation for this project and gave suggestions on what types of bugs to introduce in \texttt{riscv-mini}.
+Vighnesh implemented the spec mining engine and evaluated it on \texttt{riscv-mini}.
 
-\subsection{Roles}
+This project makes use of LTL specifications and conversion of an LTL formula to an automaton.
+We thank Prof. Seshia for introducing a wide variety of topics in this course and for his advice on our project.
 
-\subsection{Usage of Class Topics}
-
-\subsection{Feedback}
-
-\begin{acks}
-To Robert, for the bagels and explaining CMYK and color spaces.
-\end{acks}
+Our project is \href{https://github.com/vighneshiyer/spec-mining/}{available on Github}.
 
 \bibliographystyle{ACM-Reference-Format}
 \bibliography{sample-base}
