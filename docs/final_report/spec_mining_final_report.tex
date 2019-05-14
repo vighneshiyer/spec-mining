@@ -169,6 +169,7 @@ where $a$ and $b$ are some boolean expressions derived from the signals in the R
 
 \subsection{Adapting LTL Templates for RTL}
 RTL simulations produce a set of finite-length traces of bitvectors.
+We assume that these traces are sampled on the rising edge of a given clock signal; from now on we assume all traces contain the values of signals at discrete clock cycles.
 In contrast, LTL properties are defined over infinite-length traces of atomic propositions.
 We convert bitvector traces to traces of \textit{delta events} which are treated as atomic propositions, and we employ notions of \textit{falsifiability} and \textit{support} to mine LTL properties on finite length traces.
 
@@ -221,13 +222,13 @@ It will be made explicit in the FSMs for each LTL template as to when a pattern 
 We will abbreviate falsifiable as $f$ and support as $s$.
 
 \subsubsection{Alternating}
-\begin{figure}[H]
+\begin{figure}
   \centering
   \begin{tikzpicture}
     \node[state] (q1) at (0,0) {0};
     \node[state] (q2) at (6,0) {1};
     \node[state] (q3) at (3,-3) {falsified};
-    \draw (-2,0) edge[above] node[align=center]{$s = 0$\\$f = 1$} (q1)
+    \draw (-2,0) edge[above,->] node[align=center]{$s = 0$\\$f = 1$} (q1)
     (q1) edge[bend left, above] node{$\Delta a \land \lnot \Delta b$} (q2)
     (q2) edge[bend left, above] node[align=center]{$\lnot \Delta a \land \Delta b$\\$s = s + 1$} (q1)
     (q1) edge[left] node{$\Delta b$} (q3)
@@ -241,13 +242,13 @@ The automaton in figure \ref{fig:alternating} mines the alternating pattern and 
 This pattern is violated if $\Delta a$ and $\Delta b$ are both true on the same timestep.
 
 \subsubsection{Until}
-\begin{figure}[H]
+\begin{figure}
   \centering
   \begin{tikzpicture}
     \node[state] (q1) at (0,0) {0};
     \node[state] (q2) at (4,0) {1};
     \node[state] (q3) at (8,0) {falsified};
-    \draw (-2,0) edge[above,-] node[align=center]{$s = 0$\\$f = 0$} (q1)
+    \draw (-2,0) edge[above] node[align=center]{$s = 0$\\$f = 0$} (q1)
     (q1) edge[loop above] node{$\lnot \Delta a$} (q1)
     (q1) edge[bend left, above] node[align=center]{$\Delta a$\\$f = 1$} (q2)
     (q2) edge[bend left, below] node[align=center]{$\lnot \Delta a \land \Delta b$\\$s = s + 1$} (q1)
@@ -261,22 +262,60 @@ This pattern is violated if $\Delta a$ and $\Delta b$ are both true on the same 
 The automaton in figure \ref{fig:until} mines the until pattern. If $\Delta a$ is seen 2 times in a row without a $\Delta b$ then this pattern is falsified. Note that if $\Delta a$ never occurs, this pattern can't be falsifiable on that particular delta trace.
 
 \subsubsection{Next}
-\begin{figure}[H]
+\begin{figure}
   \centering
   \begin{tikzpicture}
     \node[state] (q1) at (0,0) {0};
-    \node[state] (q2) at (4,0) {1};
-    \node[state] (q3) at (8,0) {falsified};
-    \draw (-2,0) edge[above,-] node[align=center]{$s = 0$\\$f = 0$} (q1)
+    \node[state] (q2) at (7,0) {1};
+    \node[state] (q3) at (12,0) {falsified};
+    \draw (-2,0) edge[above] node[align=center]{$s = 0$\\$f = 0$\\$t = 0$} (q1)
     (q1) edge[loop above] node{$\lnot \Delta a$} (q1)
-    (q1) edge[bend left, above] node[align=center]{$\Delta a$\\$f = 1$} (q2)
-    (q2) edge[bend left, below] node[align=center]{$\lnot \Delta a \land \Delta b$\\$s = s + 1$} (q1)
-    (q2) edge[loop above] node[align=center]{$\Delta a \land \Delta b$\\$s = s + 1$} (q2)
-    (q2) edge[above] node{$\Delta a$} (q3);
+    (q1) edge[bend left, above] node[align=center]{$\Delta a$\\$f = 1$\\$t = t_{\Delta a}$} (q2)
+    (q2) edge[bend left, below] node[align=center]{$\lnot \Delta a \land \Delta b \land (t_{\Delta b} = t + T_{clk})$\\$s = s + 1$} (q1)
+    (q2) edge[loop above] node[align=center]{$\Delta a \land \Delta b \land (t_{\Delta a} = t + T_{clk})$\\$s = s + 1$\\$t = t_{\Delta a}$} (q2)
+    (q2) edge[above] node{Else} (q3);
   \end{tikzpicture}
 \caption{Automaton that mines the next LTL pattern}
 \label{fig:next}
 \end{figure}
+
+Some hacking is needed with the next automaton in figure \ref{fig:next} to constrain the pattern to only be valid when $\Delta b$ happens after 1 clock cycle after $\Delta a$.
+The variables $t_{\Delta a}$ and $t_{\Delta b}$ represent the time at which the $a$ and $b$ delta events occured on the transitions in which they are used.
+Let $T_{clk}$ be the clock period, and $t$ is a state variable to hold the transition time of $a$.
+
+\subsubsection{Eventual}
+\begin{figure}
+  \centering
+  \begin{tikzpicture}
+    \node[state] (q0) at (0,0) {0};
+    \node[state] (q2) at (10,0) {2};
+    \node[state] (q1) at (5,1) {1};
+    \draw
+    (-2,0) edge[above] node[align=center]{$s = 0$\\$f = 0$\\$e = \emptyset$\\$t = 0$} (q0)
+    (q0) edge[loop above] node{$\lnot \Delta a$} (q0)
+    (q0) edge[bend left, above] node[align=center]{$\Delta a$\\$f = 1$\\$t = t_{\Delta a}$} (q1)
+    (q1) edge[bend left, below] node[align=center]{$\lnot \Delta a \land \Delta b$\\$s = s + 1$\\$e = e \cup (t_{\Delta b} - t)$} (q0)
+    (q1) edge[loop above] node{$\lnot \Delta b$} (q1)
+    (q1) edge[bend left, above] node[align=center]{$\Delta a \land \Delta b$\\$s = s + 1$\\$t = t_{\Delta a}$\\$e = e \cup (t_{\Delta a} - t)$} (q2)
+    (q2) edge[loop right] node[align=center]{$\Delta a \land \Delta b$\\$s = s + 1$\\$t = t_{\Delta a}$\\$e = e \cup (t_{\Delta a} - t)$} (q2)
+    (q2) edge[bend left, below] node[align=center]{$\lnot \Delta b$\\$t = t_{\Delta a}$} (q1)
+    (q2) edge[bend left=60, below] node[align=center]{$\lnot \Delta a \land \Delta b$\\$s = s + 1$\\$e = e \cup (t_{\Delta b} - t)$} (q0)
+    ;
+  \end{tikzpicture}
+\caption{Automaton that mines the eventual LTL pattern}
+\label{fig:eventual}
+\end{figure}
+
+Note that the eventual pattern is never falsifiable on a finite-length trace as seen in figure \ref{fig:eventual}.
+In addition to simply keeping track of the \textit{support} we also maintain a set of times it took to get to $\Delta b$ from $\Delta a$.
+This allows us to empirically find cycle limits for the eventual pattern so it can reasonably be applied to finite-length traces.
+
+\subsection{Naive Mining Algorithm}
+% Split signals across modules
+% For each module only consider module port signals and signals below 5 bits
+% For leaf modules consider internal signals as well
+% Mine on permutations of all signal crosses on all automata
+% Parallelize across module boundaries
 
 
 \subsection{Merging Properties}
