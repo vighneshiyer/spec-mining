@@ -30,9 +30,12 @@
 \renewcommand{\shortauthors}{Iyer and Kim}
 
 \begin{abstract}
-  With increasing RTL design complexity it is increasingly difficult to debug why a subset of tests fail in chip-level emulation. Commonly, realistic workloads are run on RTL being emulated on an FPGA and 
-  from the use of powerful DSLs (Chisel) and higher levels of abstraction (HLS), the number of subtle bugs present in a design also increases.
-  Many design bugs are difficult to catch with unit testing...
+  With increasing RTL design complexity it is increasingly difficult to debug why a subset of tests fail in chip-level emulation.
+  We propose the use of specification mining to 
+  % TODO TODO TODO TODO
+  %Commonly, realistic workloads are run on RTL being emulated on an FPGA and
+  %from the use of powerful DSLs (Chisel) and higher levels of abstraction (HLS), the number of subtle bugs present in a design also increases.
+  %Many design bugs are difficult to catch with unit testing...
   %As hardware complexity increases to meet performance targets and implement required functionality, verification becomes much more challenging. A recent study shows that verification dominates time-to-market and it is getting worse over time\supercite{Foster}. Therefore, it is critical to invent effective hardware verification tools to alleviate time and manual effort to trace the root cause of a design bug.
 \end{abstract}
 \maketitle
@@ -109,6 +112,7 @@ The test suite contains a comprehensive set of ISA tests and benchmarks which wi
 
 \subsection{Prior Work}
 Specification mining has been applied to both software and hardware verification.
+% TODO TODO TODO TODO
 % Mention Texada and Sanjit's Toyota paper
 % Mention Wenchao Li's thesis as the main inspiration
 % Mention SAT-based mux methods for bug localization and point out its shortcomings
@@ -127,22 +131,87 @@ It is our hope that the failing tests will trigger failures in the mined propert
 \end{figure}
 The mined properties which were violated can be ranked based on the time of their violation and we can use the SAT localization techniques mentioned above to further pinpoint the bug location.
 
-\section{Algorithms}
+\section{Model and Algorithms}
+In this section, we will specify the formal model for LTL specification mining, how we adapted LTL formulas for RTL, and the algorithms used in the spec mining engine.
 
-\subsection{Delta Traces}
+\subsection{Hardware Idioms in LTL}
+They can be used to describe many common idioms present in RTL. A few examples:
+\begin{itemize}
+  \item There should eventually be a response (\texttt{resp}) after a request (\texttt{req}) \\
+    $\quad \mathbf{G}\, (\mathtt{req} \rightarrow \mathbf{XF}\, \mathtt{resp})$
+  \item There should be a response in 2 cycles after a request \\
+    $\quad \mathbf{G}\, (\mathtt{req} \rightarrow \mathbf{XX}\, \mathtt{resp})$
+  \item The ready/valid interface should keep \texttt{valid} high once it has been asserted until \texttt{ready} goes high \\
+    $\quad \mathbf{G}\, (\mathtt{valid} \rightarrow \mathbf{X}\, (\mathtt{valid}\, \mathbf{U}\, \mathtt{ready}))$
+  \item After a ready/valid transaction, the slave should be \texttt{ready} again within 2 cycles \\
+    $\quad \mathbf{G}\, ((\mathtt{valid} \land \mathtt{ready}) \rightarrow (\mathbf{X}\, \mathtt{ready} \lor \mathbf{XX}\, \mathtt{ready}))$
+\end{itemize}
 
-\subsection{LTL Templates}
+\subsubsection{LTL Templates} \label{templates}
+The formulas above can be templated by replacing the concrete signals (such as \texttt{ready}, \texttt{resp}, etc.) with variable placeholders. We consider 4 LTL templates for spec mining derived from Li's prior work\cite{Li_2014}:
+
+\begin{itemize}
+  \item Alternating: $a\, \mathbf{A}\, b$
+  \item Until: $\mathbf{G}\, (a \rightarrow \mathbf{X}\, (a\, \mathbf{U}\, b))$
+  \item Next: $\mathbf{G}\, (a \rightarrow \mathbf{X}\, b)$
+  \item Eventual: $\mathbf{G}\, (a \rightarrow \mathbf{X F}\, b)$
+\end{itemize}
+
+where $a$ and $b$ are some boolean expressions derived from the signals in the RTL.
+
+\subsection{Adapting LTL Templates for RTL}
+RTL simulations produce a set of finite-length traces of bitvectors.
+In contrast, LTL properties are defined over infinite-length traces of atomic propositions.
+We convert bitvector traces to traces of \textit{delta events} which are treated as atomic propositions, and we employ notions of \textit{falsifiability} and \textit{support} to mine LTL properties on finite length traces.
+
+Let a signal trace $\tau_i$ be a tuple of length $T$ which contains the value of the signal $i$ (a bitvector) at every discrete timestep of an RTL simulation.
+Let there be $N$ signals in the RTL design: $i \in [0,N)$.
+We can convert $\tau_i$ to its delta trace $\tau_{\Delta i}$ as such:
+\begin{align*}
+  \tau_{\Delta i}(t) = (\tau_i(t-1) \neq \tau_i(t)) \quad \forall t \in [1,T)
+\end{align*}
+
+Note that $\tau_{\Delta i}$ is a tuple of length $T-1$ and is a trace of atomic propositions.
+Simply put, we convert a bitvector signal trace to a boolean trace which is 1 whenever the signal changes value, and 0 otherwise.
+We now consider the templates in section \ref{templates} in the context where $a, b = \tau_{\Delta i}, \tau_{\Delta j}, i \neq j$, for some $i, j$.
+
+Here is a concrete example where $k, q$ are bitvector signals in an RTL design where $k$ is 1 bit wide and $q$ is 10 bits wide:
+\begin{align*}
+  \tau_{k} &= (0, 1, 1, 1, 0) \\
+  \tau_{q} &= (0, 100, 200, 200, 200) \\
+  \tau_{\Delta k} &= (1, 0, 0, 1) \\
+  \tau_{\Delta q} &= (1, 1, 0, 0)
+\end{align*}
+
+Note that even though $k$ is a boolean signal and can already be treated as an atomic proposition, we only mine LTL properties on its \textit{delta trace} and not the signal itself.
+
+In RTL designs, it is usually the case that the density of transitions for a given signal is fairly low.
+Signal traces can be stored in a compressed format where we only record the timestep in which the signal value changes.
+Indeed, this is conveniently how traces are stored in a VCD (value change dump) file which is the input to the spec miner.
+We can extract sparsely represented delta traces from a VCD file as a tuple of tuples where the inner tuple consists of (timestep, value) pairs.
+\begin{align*}
+  \tau_{\Delta k, compressed} &= ((0,1), (1,0), (3,1)) \\
+  \tau_{\Delta q, compressed} &= ((0,1), (2,0))
+\end{align*}
 
 \subsection{Mining with Automata}
+We construct FSMs for each of the LTL property templates that take compressed delta traces as inputs.
 % Support, confidence, falsifiability, falsification
 
 \subsection{Merging Properties}
 
 \subsection{Checking Against VCDs}
 
-\section{Challenges}
+\subsection{Challenges}
 
 \section{Results}
+
+\subsection{Future Work}
+% Additional templates
+% Faster miner (software engineering)
+% Custom ways to construct AP traces from signal traces (ready/valid boundary, using boolean signals directly, etc.)
+% General miner (take any LTL formula and construct a miner automatically)
+% 
 
 \section{Course-Related}
 
