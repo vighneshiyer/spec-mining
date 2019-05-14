@@ -1,5 +1,13 @@
 \documentclass[acmlarge,11pt]{acmart}
 \usepackage{minted}
+\usepackage{tikz}
+\usetikzlibrary{automata, positioning, arrows}
+\tikzset{->,  % makes the edges directed
+>=stealth, % makes the arrow heads bold
+node distance=3cm, % specifies the minimum distance between two nodes. Change if necessary.
+every state/.style={thick, fill=gray!10}, % sets the properties for each ’state’ node
+initial text=$ $, % sets the text that appears on the start arrow
+}
 
 % Remove DOI info
 \makeatletter
@@ -178,9 +186,9 @@ We now consider the templates in section \ref{templates} in the context where $a
 Here is a concrete example where $k, q$ are bitvector signals in an RTL design where $k$ is 1 bit wide and $q$ is 10 bits wide:
 \begin{align*}
   \tau_{k} &= (0, 1, 1, 1, 0) \\
-  \tau_{q} &= (0, 100, 200, 200, 200) \\
+  \tau_{q} &= (0, 0, 200, 200, 300) \\
   \tau_{\Delta k} &= (1, 0, 0, 1) \\
-  \tau_{\Delta q} &= (1, 1, 0, 0)
+  \tau_{\Delta q} &= (0, 1, 0, 1)
 \end{align*}
 
 Note that even though $k$ is a boolean signal and can already be treated as an atomic proposition, we only mine LTL properties on its \textit{delta trace} and not the signal itself.
@@ -188,15 +196,88 @@ Note that even though $k$ is a boolean signal and can already be treated as an a
 In RTL designs, it is usually the case that the density of transitions for a given signal is fairly low.
 Signal traces can be stored in a compressed format where we only record the timestep in which the signal value changes.
 Indeed, this is conveniently how traces are stored in a VCD (value change dump) file which is the input to the spec miner.
-We can extract sparsely represented delta traces from a VCD file as a tuple of tuples where the inner tuple consists of (timestep, value) pairs.
+We can extract sparsely represented delta traces from a VCD file as a tuple of timesteps where the signal transitions. %of tuples where the inner tuple consists of (timestep, value) pairs.
 \begin{align*}
-  \tau_{\Delta k, compressed} &= ((0,1), (1,0), (3,1)) \\
-  \tau_{\Delta q, compressed} &= ((0,1), (2,0))
+  \tau_{\Delta k, compressed} &= (0, 3) \\
+  \tau_{\Delta q, compressed} &= (1, 3)
 \end{align*}
 
+We want to consider the templates in section \ref{templates}, so we can zip 2 compressed delta traces together that indicates which of the signals transitioned.
+\begin{align*}
+  \tau_{\Delta k, \Delta q} &= ((\Delta k, \lnot \Delta q), (\lnot \Delta k, \Delta q), (\Delta k, \Delta q))
+\end{align*}
+This means that initially, $k$ transitioned and $q$ did not on a given timestep, then on a future timestep $q$ transitioned and $k$ did not, and on another future timestep both $k$ and $q$ transitioned.
+Note that in this data structure, it is impossible to have a tuple where both $k$ and $q$ \textit{did not} transition.
+This data structure is perfect to construct automatons that mine LTL properties.
+
+
 \subsection{Mining with Automata}
-We construct FSMs for each of the LTL property templates that take compressed delta traces as inputs.
-% Support, confidence, falsifiability, falsification
+We construct FSMs for each of the LTL property templates that take zipped compressed delta traces as an input.
+
+\subsubsection{Falsifiability and Support}
+A given LTL property template is \textit{falsifiable} over a zipped delta trace if its mining automaton reaches a state from which it can move to the \textit{falsified} state in one step.
+We loosely define the \textit{support} for an LTL property over a trace as the number of times the pattern "repeats".
+It will be made explicit in the FSMs for each LTL template as to when a pattern "repetition" occurs; we have yet to formalize this notion.
+We will abbreviate falsifiable as $f$ and support as $s$.
+
+\subsubsection{Alternating}
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}
+    \node[state] (q1) at (0,0) {0};
+    \node[state] (q2) at (6,0) {1};
+    \node[state] (q3) at (3,-3) {falsified};
+    \draw (-2,0) edge[above] node[align=center]{$s = 0$\\$f = 1$} (q1)
+    (q1) edge[bend left, above] node{$\Delta a \land \lnot \Delta b$} (q2)
+    (q2) edge[bend left, above] node[align=center]{$\lnot \Delta a \land \Delta b$\\$s = s + 1$} (q1)
+    (q1) edge[left] node{$\Delta b$} (q3)
+    (q2) edge[right] node{$\Delta a$} (q3);
+  \end{tikzpicture}
+\caption{Automaton that mines the alternating LTL pattern}
+\label{fig:alternating}
+\end{figure}
+
+The automaton in figure \ref{fig:alternating} mines the alternating pattern and advances support when a $\Delta a$ then $\Delta b$ sequence occurs.
+This pattern is violated if $\Delta a$ and $\Delta b$ are both true on the same timestep.
+
+\subsubsection{Until}
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}
+    \node[state] (q1) at (0,0) {0};
+    \node[state] (q2) at (4,0) {1};
+    \node[state] (q3) at (8,0) {falsified};
+    \draw (-2,0) edge[above,-] node[align=center]{$s = 0$\\$f = 0$} (q1)
+    (q1) edge[loop above] node{$\lnot \Delta a$} (q1)
+    (q1) edge[bend left, above] node[align=center]{$\Delta a$\\$f = 1$} (q2)
+    (q2) edge[bend left, below] node[align=center]{$\lnot \Delta a \land \Delta b$\\$s = s + 1$} (q1)
+    (q2) edge[loop above] node[align=center]{$\Delta a \land \Delta b$\\$s = s + 1$} (q2)
+    (q2) edge[above] node{$\Delta a$} (q3);
+  \end{tikzpicture}
+\caption{Automaton that mines the until LTL pattern}
+\label{fig:until}
+\end{figure}
+
+The automaton in figure \ref{fig:until} mines the until pattern. If $\Delta a$ is seen 2 times in a row without a $\Delta b$ then this pattern is falsified. Note that if $\Delta a$ never occurs, this pattern can't be falsifiable on that particular delta trace.
+
+\subsubsection{Next}
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}
+    \node[state] (q1) at (0,0) {0};
+    \node[state] (q2) at (4,0) {1};
+    \node[state] (q3) at (8,0) {falsified};
+    \draw (-2,0) edge[above,-] node[align=center]{$s = 0$\\$f = 0$} (q1)
+    (q1) edge[loop above] node{$\lnot \Delta a$} (q1)
+    (q1) edge[bend left, above] node[align=center]{$\Delta a$\\$f = 1$} (q2)
+    (q2) edge[bend left, below] node[align=center]{$\lnot \Delta a \land \Delta b$\\$s = s + 1$} (q1)
+    (q2) edge[loop above] node[align=center]{$\Delta a \land \Delta b$\\$s = s + 1$} (q2)
+    (q2) edge[above] node{$\Delta a$} (q3);
+  \end{tikzpicture}
+\caption{Automaton that mines the next LTL pattern}
+\label{fig:next}
+\end{figure}
+
 
 \subsection{Merging Properties}
 
