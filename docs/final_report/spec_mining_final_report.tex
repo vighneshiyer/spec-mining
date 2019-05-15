@@ -40,13 +40,9 @@ initial text=$ $, % sets the text that appears on the start arrow
 \renewcommand{\shortauthors}{Iyer and Kim}
 
 \begin{abstract}
-  With increasing RTL design complexity it is increasingly difficult to debug why a subset of tests fail in chip-level emulation.
-  We propose the use of specification mining to
-  % TODO TODO TODO TODO
-  %Commonly, realistic workloads are run on RTL being emulated on an FPGA and
-  %from the use of powerful DSLs (Chisel) and higher levels of abstraction (HLS), the number of subtle bugs present in a design also increases.
-  %Many design bugs are difficult to catch with unit testing...
-  %As hardware complexity increases to meet performance targets and implement required functionality, verification becomes much more challenging. A recent study shows that verification dominates time-to-market and it is getting worse over time\supercite{Foster}. Therefore, it is critical to invent effective hardware verification tools to alleviate time and manual effort to trace the root cause of a design bug.
+  With increasing RTL design complexity it is increasingly difficult to debug why a subset of tests may fail in chip-level emulation.
+  We propose the use of specification mining to extract a designer's assumptions about an RTL design and encode them as assertions that are checked during a failing test execution.
+  Our initial results show that this technique is promising for localizing bugs in \textit{space and time} by demonstrating that the mined fine-grained LTL properties are violated before a high-level test failure condition occurs, such as timeout or hanging.
 \end{abstract}
 \maketitle
 \thispagestyle{empty}
@@ -121,11 +117,16 @@ We use \texttt{riscv-mini}\cite{riscv-mini}, a simple 3-stage in-order RISC-V pr
 The test suite contains a comprehensive set of ISA tests and benchmarks which will be used to generate the VCD files for mining.
 
 \subsection{Prior Work}
-Specification mining has been applied to both software and hardware verification.
-% TODO TODO TODO TODO
-% Mention Texada and Sanjit's Toyota paper
-% Mention Wenchao Li's thesis as the main inspiration
-% Mention SAT-based mux methods for bug localization and point out its shortcomings
+Specification mining has been previously applied to both software and hardware verification.
+The Texada LTL spec miner\cite{Lemieux_2015} mines LTL properties from server logs and introduces the notions of confidence, support, and support potential.
+Prior work\cite{Yamaguchi_2016} implemented a pre-condition miner which generated restrictions on inputs to software functions to be used for later model checking.
+
+The main inspiration for this work comes from Wenchao Li's\cite{Li_2010}\cite{Li_2014} work on spec mining on VCD files, where four LTL templates were developed.
+His work demonstrated how mined specs could detect transient and stuck-at faults in an RTL design.
+We aim to extend his work for the purpose of bug localization.
+
+There are also a host of SAT-based mux instrumentation methods\cite{Mirzaeian_2008}\cite{Smith_2005}\cite{Chang_2007} that have been explored for bug localization, primarily in space (but not time).
+We believe that these techniques do not scale well with larger RTL designs and do not enable looking far back in time due to the exponential blowup of cycle unrolling.
 
 \subsection{High-Level Flow}
 The long-term plan is to leverage the spec mining engine and the prior work of DESSERT to provide an FPGA-acclererated debugging platform.
@@ -460,7 +461,7 @@ We thank Prof. Seshia for introducing a wide variety of topics in this course an
 Our project is \href{https://github.com/vighneshiyer/spec-mining/}{available on Github}.
 
 \bibliographystyle{ACM-Reference-Format}
-\bibliography{sample-base}
+\bibliography{references}
 
 \end{document}
 \endinput
