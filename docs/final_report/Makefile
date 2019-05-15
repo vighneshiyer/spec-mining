@@ -1,6 +1,7 @@
 SHELL=/bin/bash
 PACKAGE=acmart
-PDF = spec_mining_final_report.pdf
+MAIN = spec_mining_final_report
+PDF = $(MAIN).pdf
 
 all:  ${PDF}
 
@@ -9,11 +10,6 @@ all:  ${PDF}
 	bibtex $(basename $<)
 	texfot pdflatex --shell-escape $<
 	texfot pdflatex --shell-escape $<
-	#- cd $(dir $@) && bibtex $(notdir $(basename $<))
-	#cd $(dir $@) && pdflatex $(notdir $<)
-	#cd $(dir $@) && pdflatex $(notdir $<)
-	#while ( grep -q '^LaTeX Warning: Label(s) may have changed' $(basename $<).log) \
-	#  do cd $(dir $@) && pdflatex $(notdir $<); done
 
 clean:
 	$(RM)  *.log *.aux \
@@ -21,3 +17,4 @@ clean:
 	*.ilg *.ind *.out *.lof \
 	*.lot *.bbl *.blg *.gls *.cut *.hd \
 	*.dvi *.ps *.thm *.tgz *.zip *.rpi $(PDF)
+	rm -rf _minted-$(MAIN)
