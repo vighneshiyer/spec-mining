@@ -1,0 +1,14 @@
+[[package]]
+name = "ego-tree"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
+name = "vcd"
+version = "0.1.0"
+dependencies = [
+ "ego-tree 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[metadata]
+"checksum ego-tree 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)" = "9733f6ada1734cb25b4033b2855ec78feb267971a2dd76012974906ba8780074"

@@ -121,9 +121,11 @@ def sample_signal(clock: List[Event], signal: List[Event]) -> List[Event]:
     Samples a signal at the posedge of the clock. The rising edge of the clock will be internally
     brought back by a nudge to sample signals that change on the clock edge.
     """
+    if (len(signal) == 0):
+        return []
     posedges = list(filter(lambda e: e.value == 1, clock))
     sig_value = signal[0].value
-    assert signal[0].time == 0, "The signal to be sampled requires an initial value"
+    #assert signal[0].time == 0, "The signal to be sampled requires an initial value"
     clk_idx, sig_idx = 0, 0
     sampled_signal = []  # type: List[Event]
 
@@ -172,14 +174,9 @@ def read_vcd_clean(vcd_file_path: str, start_time: int, signal_bit_limit: int) -
     clock = clocks[0]
     #print("Found clock {}".format(clock))
 
-    # Sample signals on the clock
-    vcd_data_sampled = {signal: sample_signal(vcd_data[clock], data) for (signal, data) in vcd_data.items()}
-    # Remove the clock from the vcd data
-    del vcd_data_sampled[clock]
-
     # Trim off events before the start_time commandline arg
-    for signal, events in vcd_data_sampled.items():
-        vcd_data_sampled[signal] = list(filter(lambda e: e.time > start_time, events))
+    for signal, events in vcd_data.items():
+        vcd_data[signal] = list(filter(lambda e: e.time > start_time, events))
 
     # Delete keys entirely that consist of *only* Chisel temporary/junk signals
     # Trim all other keys of signals which are Chisel temporary/junk signals
@@ -190,7 +187,7 @@ def read_vcd_clean(vcd_file_path: str, start_time: int, signal_bit_limit: int) -
         signals_to_ignore = {'_RAND', '_GEN', '_T', 'reset'}
         return any([ignore_str in sig.name for ignore_str in signals_to_ignore])
 
-    for signal_set in vcd_data_sampled.keys():
+    for signal_set in vcd_data.keys():
         ignored_signals = set(filter(lambda sig: ignore_sig(sig), signal_set))
         if len(ignored_signals) == len(signal_set):
             # If all Signals in this key are junk, then delete the entire key
@@ -200,16 +197,22 @@ def read_vcd_clean(vcd_file_path: str, start_time: int, signal_bit_limit: int) -
             keys_to_trim[signal_set] = ignored_signals
 
     for key_to_delete in keys_to_delete:
-        del vcd_data_sampled[key_to_delete]
+        del vcd_data[key_to_delete]
 
     for (key_to_trim, set_of_junk_signals) in keys_to_trim.items():
         new_set = key_to_trim - set_of_junk_signals
-        vcd_data_sampled[new_set] = vcd_data_sampled.pop(key_to_trim)
+        vcd_data[new_set] = vcd_data.pop(key_to_trim)
 
     # Trim off signals that have no delta events or are too wide
-    vcd_data_cleaned = {signal_set: trace for (signal_set, trace) in vcd_data_sampled.items()
+    vcd_data_cleaned = {signal_set: trace for (signal_set, trace) in vcd_data.items()
                         if len(trace) > 0 and list(signal_set)[0].width <= signal_bit_limit}
-    return module_tree, vcd_data_cleaned
+
+    # Sample signals on the clock
+    vcd_data_sampled = {signal: sample_signal(vcd_data_cleaned[clock], data) for (signal, data) in vcd_data_cleaned.items()}
+    # Remove the clock from the vcd data
+    del vcd_data_sampled[clock]
+
+    return module_tree, vcd_data_sampled
 
 
 if __name__ == "__main__":

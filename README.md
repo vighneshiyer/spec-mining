@@ -81,3 +81,11 @@ python main.py --start-time 10 --signal-bit-width 5 /path/to/riscv-mini/outputs/
 - Show diagrams of the automata that are used for mining (annotated from the SPOT emitted version)
 - Show examples of support
 - Show the merging algorithm
+
+# Next Direction from Donggyu
+- Instead of delta events, construct value change event traces for specific value transitions
+    - i.e. 2 bit reg changes from 1 to 2 is a particular event we can construct a trace for
+- Mention bounded liveness property mining on eventual template
+- Use VCS.
+- Make VCD parsing fast, however it should be done.
+    - Golden vs C++ version speed benchmark

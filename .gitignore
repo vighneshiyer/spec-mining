@@ -360,3 +360,5 @@ __pycache__
 *.snm
 *.toc
 *.vrb
+
+vcd

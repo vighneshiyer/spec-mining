@@ -216,7 +216,7 @@ def mine_module(module: Module, vcd_data: VCDData) -> MinerResult:
 
     result = {}  # type: MinerResult
     property_classes = [Alternating, Next, Eventual, Until]
-    print("Mining module = {}".format(module.name))
+    print("Mining module = {} with num signals = {}".format(module.name, len(vcd_data_scoped.keys())))
     for combo in itertools.permutations(vcd_data_scoped.keys(), 2):
         for prop_type in property_classes:
             a = vcd_data_scoped[combo[0]]
@@ -225,6 +225,7 @@ def mine_module(module: Module, vcd_data: VCDData) -> MinerResult:
             pattern_stats = prop.mine(a, b)
             if pattern_stats.falsifiable:
                 result[prop] = pattern_stats
+    print("Mined {} properties".format(len(result.keys())))
     return result
 
 
